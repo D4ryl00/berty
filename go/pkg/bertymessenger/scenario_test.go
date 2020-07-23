@@ -236,7 +236,7 @@ func TestScenario(t *testing.T) {
 	}
 
 	t.Log("ShareableBertyID")
-	share, err := clients[0].Messenger.InstanceShareableBertyID(ctx, &InstanceShareableBertyID_Request{
+	/*share, err := clients[0].Messenger.InstanceShareableBertyID(ctx, &InstanceShareableBertyID_Request{
 		DisplayName: "client[0]",
 	})
 	require.NoError(t, err)
@@ -245,6 +245,17 @@ func TestScenario(t *testing.T) {
 		PK:                   clients[0].config.AccountPK,
 		PublicRendezvousSeed: share.BertyID.PublicRendezvousSeed,
 		Metadata:             []byte(share.BertyID.DisplayName),
+	}*/
+
+	_, err = clients[0].Protocol.Client.ContactRequestEnable(ctx, &bertytypes.ContactRequestEnable_Request{})
+	require.NoError(t, err)
+	receiverRDV, err := clients[0].Protocol.Client.ContactRequestResetReference(ctx, &bertytypes.ContactRequestResetReference_Request{})
+	require.NoError(t, err)
+	require.NotNil(t, receiverRDV)
+
+	contact := &bertytypes.ShareableContact{
+		PK:                   clients[0].config.AccountPK,
+		PublicRendezvousSeed: receiverRDV.PublicRendezvousSeed,
 	}
 
 	t.Log("Send ContactRequest")
@@ -283,7 +294,7 @@ func TestScenario(t *testing.T) {
 	t.Log("Send message")
 	/*_, err = clients[1].Messenger.SendMessage(ctx, &SendMessage_Request{
 		GroupPK: clients[1].group.Group.PublicKey,
-		Message: "caca",
+		Message: "test",
 	})
 	require.NoError(t, err)*/
 	_, err = clients[1].Protocol.Client.AppMessageSend(ctx, &bertytypes.AppMessageSend_Request{
@@ -295,7 +306,7 @@ func TestScenario(t *testing.T) {
 	/*t.Log("Send message")
 	_, err = clients[0].Messenger.SendMessage(ctx, &SendMessage_Request{
 		GroupPK: clients[1].group.Group.PublicKey,
-		Message: "caca2",
+		Message: "test2",
 	})
 	require.NoError(t, err)*/
 
@@ -386,7 +397,7 @@ func subscribeMessageEvents(t *testing.T, ctx context.Context, receiver *BertyCl
 			continue
 		}
 
-		require.Equal(t, "caca", []byte(payload.(*PayloadUserMessage).Body))*/
+		require.Equal(t, "test", []byte(payload.(*PayloadUserMessage).Body))*/
 		require.Equal(t, "test", string(evt.Message))
 		return
 	}
