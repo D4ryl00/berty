@@ -1,6 +1,7 @@
 package bertymessenger
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -40,6 +41,161 @@ type BertyClient struct {
 
 	config *bertytypes.InstanceGetConfiguration_Reply
 	group  *bertytypes.GroupInfo_Reply
+}
+
+func addAsContact(ctx context.Context, t *testing.T, senders, receivers []*bertyprotocol.TestingProtocol) {
+	t.Log(logTree("Add Senders/Receivers as Contact", 0, true))
+	start := time.Now()
+	var sendDuration, receiveDuration, acceptDuration, activateDuration time.Duration
+
+	for i, sender := range senders {
+		for _, receiver := range receivers {
+			substart := time.Now()
+
+			// Get sender/receiver configs
+			senderCfg, err := sender.Client.InstanceGetConfiguration(ctx, &bertytypes.InstanceGetConfiguration_Request{})
+			require.NoError(t, err)
+			require.NotNil(t, senderCfg)
+			receiverCfg, err := receiver.Client.InstanceGetConfiguration(ctx, &bertytypes.InstanceGetConfiguration_Request{})
+			require.NoError(t, err)
+			require.NotNil(t, receiverCfg)
+
+			// Setup receiver's sharable contact
+			_, err = receiver.Client.ContactRequestEnable(ctx, &bertytypes.ContactRequestEnable_Request{})
+			require.NoError(t, err)
+			receiverRDV, err := receiver.Client.ContactRequestResetReference(ctx, &bertytypes.ContactRequestResetReference_Request{})
+			require.NoError(t, err)
+			require.NotNil(t, receiverRDV)
+			if i == 1 {
+				break
+			}
+
+			receiverSharableContact := &bertytypes.ShareableContact{
+				PK:                   receiverCfg.AccountPK,
+				PublicRendezvousSeed: receiverRDV.PublicRendezvousSeed,
+			}
+
+			// Sender sends contact request
+			_, err = sender.Client.ContactRequestSend(ctx, &bertytypes.ContactRequestSend_Request{
+				Contact: receiverSharableContact,
+			})
+
+			// Check if sender and receiver are the same account, should return the right error and skip
+			if bytes.Compare(senderCfg.AccountPK, receiverCfg.AccountPK) == 0 {
+				require.Equal(t, errcode.LastCode(err), errcode.ErrContactRequestSameAccount)
+				continue
+			}
+
+			// Check if contact request was already sent, should return right error and skip
+			receiverWasSender := false
+			for j := 0; j < i; j++ {
+				if senders[j] == receiver {
+					receiverWasSender = true
+				}
+			}
+
+			senderWasReceiver := false
+			if receiverWasSender {
+				for _, r := range receivers {
+					if r == sender {
+						senderWasReceiver = true
+					}
+				}
+			}
+
+			if receiverWasSender && senderWasReceiver {
+				require.Equal(t, errcode.LastCode(err), errcode.ErrContactRequestContactAlreadyAdded)
+				continue
+			}
+
+			// No other error should occur
+			require.NoError(t, err)
+
+			sendDuration += time.Since(substart)
+			substart = time.Now()
+
+			// Receiver subcribes to handle incoming contact request
+			subCtx, subCancel := context.WithCancel(ctx)
+			subReceiver, err := receiver.Client.GroupMetadataSubscribe(subCtx, &bertytypes.GroupMetadataSubscribe_Request{
+				GroupPK: receiverCfg.AccountGroupPK,
+				Since:   []byte("give me everything"),
+			})
+			require.NoError(t, err)
+			found := false
+
+			// Receiver waits for valid contact request coming from sender
+			for {
+				evt, err := subReceiver.Recv()
+				if err == io.EOF || subReceiver.Context().Err() != nil {
+					break
+				}
+
+				require.NoError(t, err)
+
+				if evt == nil || evt.Metadata.EventType != bertytypes.EventTypeAccountContactRequestIncomingReceived {
+					continue
+				}
+
+				req := &bertytypes.AccountContactRequestReceived{}
+				err = req.Unmarshal(evt.Event)
+
+				require.NoError(t, err)
+
+				if bytes.Compare(senderCfg.AccountPK, req.ContactPK) == 0 {
+					found = true
+					break
+				}
+			}
+
+			subCancel()
+			require.True(t, found)
+
+			receiveDuration += time.Since(substart)
+			substart = time.Now()
+
+			// Receiver accepts contact request
+			_, err = receiver.Client.ContactRequestAccept(ctx, &bertytypes.ContactRequestAccept_Request{
+				ContactPK: senderCfg.AccountPK,
+			})
+
+			require.NoError(t, err)
+
+			acceptDuration += time.Since(substart)
+			substart = time.Now()
+
+			// Both receiver and sender activate the contact group
+			grpInfo, err := sender.Client.GroupInfo(ctx, &bertytypes.GroupInfo_Request{
+				ContactPK: receiverCfg.AccountPK,
+			})
+			require.NoError(t, err)
+
+			_, err = sender.Client.ActivateGroup(ctx, &bertytypes.ActivateGroup_Request{
+				GroupPK: grpInfo.Group.PublicKey,
+			})
+
+			require.NoError(t, err)
+
+			_, err = receiver.Client.ActivateGroup(ctx, &bertytypes.ActivateGroup_Request{
+				GroupPK: grpInfo.Group.PublicKey,
+			})
+
+			require.NoError(t, err)
+
+			activateDuration += time.Since(substart)
+			substart = time.Now()
+		}
+	}
+
+	t.Log(logTree("Send Contact Requests", 1, true))
+	t.Logf(logTree("duration: %s", 1, false), sendDuration)
+	t.Log(logTree("Receive Contact Requests", 1, true))
+	t.Logf(logTree("duration: %s", 1, false), receiveDuration)
+	t.Log(logTree("Accept Contact Requests", 1, true))
+	t.Logf(logTree("duration: %s", 1, false), acceptDuration)
+	t.Log(logTree("Activate Contact Groups", 1, true))
+	t.Logf(logTree("duration: %s", 1, false), activateDuration)
+
+	t.Logf(logTree("duration: %s", 0, false), time.Since(start))
 }
 
 func startMockedService(ctx context.Context, t *testing.T, logger *zap.Logger, amount int) ([]*BertyClient, func()) {
@@ -225,6 +381,11 @@ func TestScenario(t *testing.T) {
 	clients, cleanup := startMockedService(ctx, t, logger, num)
 	defer cleanup()
 
+	/*clientsT := make([]*bertyprotocol.TestingProtocol, num)
+	clientsT[0] = clients[0].Protocol
+	clientsT[1] = clients[1].Protocol
+	addAsContact(ctx, t, clientsT, clientsT)*/
+
 	for i := range clients {
 		// Start real protocol
 		//clients[i] = startBertyService(t, logger)
@@ -236,17 +397,6 @@ func TestScenario(t *testing.T) {
 	}
 
 	t.Log("ShareableBertyID")
-	/*share, err := clients[0].Messenger.InstanceShareableBertyID(ctx, &InstanceShareableBertyID_Request{
-		DisplayName: "client[0]",
-	})
-	require.NoError(t, err)
-
-	contact := &bertytypes.ShareableContact{
-		PK:                   clients[0].config.AccountPK,
-		PublicRendezvousSeed: share.BertyID.PublicRendezvousSeed,
-		Metadata:             []byte(share.BertyID.DisplayName),
-	}*/
-
 	_, err = clients[0].Protocol.Client.ContactRequestEnable(ctx, &bertytypes.ContactRequestEnable_Request{})
 	require.NoError(t, err)
 	receiverRDV, err := clients[0].Protocol.Client.ContactRequestResetReference(ctx, &bertytypes.ContactRequestResetReference_Request{})
@@ -289,6 +439,9 @@ func TestScenario(t *testing.T) {
 	_, err = clients[0].Protocol.Client.ActivateGroup(ctx, &bertytypes.ActivateGroup_Request{
 		GroupPK: clients[0].group.Group.PublicKey,
 	})
+	require.NoError(t, err)
+
+	_, err = clients[0].Protocol.Client.ContactRequestDisable(ctx, &bertytypes.ContactRequestDisable_Request{})
 	require.NoError(t, err)
 
 	t.Log("Send message")
@@ -401,4 +554,16 @@ func subscribeMessageEvents(t *testing.T, ctx context.Context, receiver *BertyCl
 		require.Equal(t, "test", string(evt.Message))
 		return
 	}
+}
+
+func logTree(log string, indent int, title bool) string {
+	if !title {
+		log = "└── " + log
+	}
+
+	for i := 0; i < indent; i++ {
+		log = "│  " + log
+	}
+
+	return log
 }
