@@ -3,7 +3,6 @@ package bertymessenger
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"math/rand"
@@ -15,7 +14,6 @@ import (
 	"berty.tech/berty/v2/go/pkg/bertyprotocol"
 	"berty.tech/berty/v2/go/pkg/bertytypes"
 	"berty.tech/berty/v2/go/pkg/errcode"
-	"github.com/gogo/protobuf/proto"
 	datastore "github.com/ipfs/go-datastore"
 	sync_ds "github.com/ipfs/go-datastore/sync"
 	config "github.com/ipfs/go-ipfs-config"
@@ -219,7 +217,10 @@ func startMockedService(ctx context.Context, t *testing.T, logger *zap.Logger, a
 		tps[i].Protocol, tps[i].cancel = bertyprotocol.NewTestingProtocol(ctx, t, opts)
 		require.NotNil(t, tps[i])
 
-		tps[i].Messenger = New(tps[i].Protocol.Client, &Opts{Logger: logger.Named("messenger")})
+		tps[i].Messenger, err = New(tps[i].Protocol.Client, &Opts{Logger: logger.Named("messenger")})
+		if err != nil {
+			cleanupRDVP()
+		}
 	}
 
 	err = opts.Mocknet.LinkAll()
@@ -327,7 +328,12 @@ func startBertyService(t *testing.T, logger *zap.Logger) *BertyClient {
 		require.NoError(t, err)
 	}
 
-	messenger := New(client, &Opts{Logger: logger.Named("messenger")})
+	messenger, err := New(client, &Opts{Logger: logger.Named("messenger")})
+	if err != nil {
+		defer node.Close()
+		defer service.Close()
+		defer client.Close()
+	}
 
 	return &BertyClient{
 		Protocol: &bertyprotocol.TestingProtocol{
@@ -500,29 +506,6 @@ func subscribeMetaDataEvents(t *testing.T, ctx context.Context, client *BertyCli
 	}
 }
 
-type MessageTyped interface {
-	proto.Message
-}
-
-func payloadParser(t *testing.T, data []byte) (MessageTyped, error) {
-	res := &AppMessageTyped{}
-
-	err := json.Unmarshal(data, res)
-	if err != nil {
-		require.NoError(t, err)
-	}
-
-	require.Equal(t, res, AppMessageType_UserMessage)
-
-	message := &PayloadUserMessage{}
-
-	if err := json.Unmarshal(data, message); err != nil {
-		require.NoError(t, err)
-	}
-
-	return message, nil
-}
-
 func subscribeMessageEvents(t *testing.T, ctx context.Context, receiver *BertyClient) {
 	t.Log("Subscribe MessageEvents")
 
@@ -544,13 +527,6 @@ func subscribeMessageEvents(t *testing.T, ctx context.Context, receiver *BertyCl
 			require.NoError(t, err)
 		}
 
-		/*payload, err := payloadParser(t, evt.Message)
-		if err != nil {
-			require.NoError(t, err)
-			continue
-		}
-
-		require.Equal(t, "test", []byte(payload.(*PayloadUserMessage).Body))*/
 		require.Equal(t, "test", string(evt.Message))
 		return
 	}
