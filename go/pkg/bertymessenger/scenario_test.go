@@ -297,7 +297,7 @@ func startBertyService(t *testing.T, logger *zap.Logger) *BertyClient {
 	api = ipfsutil.InjectPubSubCoreAPIExtendedAdaptater(api, psapi)
 	require.NoError(t, err)
 
-	ipfsutil.EnableConnLogger(logger, node.PeerHost)
+	ipfsutil.EnableConnLogger(ctx, logger, node.PeerHost)
 
 	rootDS := sync_ds.MutexWrap(datastore.NewMapDatastore())
 	mk := bertyprotocol.NewMessageKeystore(ipfsutil.NewNamespacedDatastore(rootDS, datastore.NewKey("messages")))
@@ -309,13 +309,12 @@ func startBertyService(t *testing.T, logger *zap.Logger) *BertyClient {
 		TinderDriver:    disc,
 		IpfsCoreAPI:     api,
 		DeviceKeystore:  bertyprotocol.NewDeviceKeystore(ks),
-		RootContext:     ctx,
 		RootDatastore:   rootDS,
 		MessageKeystore: mk,
 		OrbitCache:      bertyprotocol.NewOrbitDatastoreCache(orbitdbDS),
 		Host:            node.PeerHost,
 	}
-	service, err := bertyprotocol.New(*protoOpts)
+	service, err := bertyprotocol.New(ctx, *protoOpts)
 
 	if err != nil {
 		require.NoError(t, err)
@@ -323,7 +322,7 @@ func startBertyService(t *testing.T, logger *zap.Logger) *BertyClient {
 
 	grpcServer := grpc.NewServer()
 
-	client, err := bertyprotocol.NewClientFromServer(grpcServer, service)
+	client, err := bertyprotocol.NewClientFromServer(ctx, grpcServer, service)
 	if err != nil {
 		require.NoError(t, err)
 	}
