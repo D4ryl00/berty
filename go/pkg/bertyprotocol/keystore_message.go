@@ -28,6 +28,10 @@ type decryptInfo struct {
 	Cid            cid.Cid
 }
 
+func (m *MessageKeystore) GetStore() datastore.Datastore {
+	return m.store
+}
+
 func (m *MessageKeystore) getDeviceChainKey(groupPK, pk crypto.PubKey) (*bertytypes.DeviceSecret, error) {
 	if m == nil {
 		return nil, errcode.ErrInvalidInput

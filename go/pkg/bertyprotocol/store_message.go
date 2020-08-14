@@ -134,6 +134,10 @@ func constructorFactoryGroupMessage(s *BertyOrbitDB) iface.StoreConstructor {
 			return nil, errcode.ErrInvalidInput.Wrap(err)
 		}
 
+		if options.Logger == nil {
+			options.Logger = zap.NewNop()
+		}
+
 		store := &messageStore{
 			devKS:  s.deviceKeystore,
 			mks:    s.messageKeystore,

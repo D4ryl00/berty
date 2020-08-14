@@ -6,11 +6,13 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
+	"sync"
 	"testing"
 	"time"
 
 	"berty.tech/berty/v2/go/internal/ipfsutil"
 	"berty.tech/berty/v2/go/internal/tinder"
+	"berty.tech/berty/v2/go/internal/tracer"
 	"berty.tech/berty/v2/go/pkg/bertyprotocol"
 	"berty.tech/berty/v2/go/pkg/bertytypes"
 	"berty.tech/berty/v2/go/pkg/errcode"
@@ -27,6 +29,7 @@ import (
 	libp2p_mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel/api/global"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	grpc "google.golang.org/grpc"
@@ -197,7 +200,10 @@ func addAsContact(ctx context.Context, t *testing.T, senders, receivers []*berty
 }
 
 func startMockedService(ctx context.Context, t *testing.T, logger *zap.Logger, amount int) ([]*BertyClient, func()) {
-	opts := &bertyprotocol.TestingOpts{Mocknet: libp2p_mocknet.New(ctx)}
+	opts := &bertyprotocol.TestingOpts{
+		Mocknet:        libp2p_mocknet.New(ctx),
+		TracerProvider: global.TraceProvider(),
+	}
 	rdvpeer, err := opts.Mocknet.GenPeer()
 	require.NoError(t, err)
 	require.NotNil(t, rdvpeer)
@@ -380,6 +386,9 @@ func TestScenario(t *testing.T) {
 		require.NoError(t, err)
 	}
 
+	flush := tracer.InitTracer("localhost:14268", "berty")
+	defer flush()
+
 	num := 2
 	//clients := make([]*BertyClient, num)
 	// Start Mocked protocol
@@ -446,29 +455,37 @@ func TestScenario(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	_, err = clients[0].Protocol.Client.ContactRequestDisable(ctx, &bertytypes.ContactRequestDisable_Request{})
-	require.NoError(t, err)
+	/*_, err = clients[0].Protocol.Client.ContactRequestDisable(ctx, &bertytypes.ContactRequestDisable_Request{})
+	require.NoError(t, err)*/
 
 	t.Log("Send message")
+	time.Sleep(1 * time.Second)
+
 	/*_, err = clients[1].Messenger.SendMessage(ctx, &SendMessage_Request{
 		GroupPK: clients[1].group.Group.PublicKey,
 		Message: "test",
 	})
 	require.NoError(t, err)*/
+
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	subscribeMessageEvents(t, ctx, clients[0], &wg)
+
 	_, err = clients[1].Protocol.Client.AppMessageSend(ctx, &bertytypes.AppMessageSend_Request{
 		GroupPK: clients[1].group.Group.PublicKey,
 		Payload: []byte("test"),
 	})
 	require.NoError(t, err)
 
-	/*t.Log("Send message")
+	wg.Wait()
+
+	t.Log("Send message")
 	_, err = clients[0].Messenger.SendMessage(ctx, &SendMessage_Request{
 		GroupPK: clients[1].group.Group.PublicKey,
 		Message: "test2",
 	})
-	require.NoError(t, err)*/
+	require.NoError(t, err)
 
-	subscribeMessageEvents(t, ctx, clients[0])
 }
 
 func subscribeMetaDataEvents(t *testing.T, ctx context.Context, client *BertyClient) {
@@ -505,30 +522,32 @@ func subscribeMetaDataEvents(t *testing.T, ctx context.Context, client *BertyCli
 	}
 }
 
-func subscribeMessageEvents(t *testing.T, ctx context.Context, receiver *BertyClient) {
+func subscribeMessageEvents(t *testing.T, ctx context.Context, receiver *BertyClient, wg *sync.WaitGroup) {
 	t.Log("Subscribe MessageEvents")
 
 	var evt *bertytypes.GroupMessageEvent
 
 	req := &bertytypes.GroupMessageSubscribe_Request{
 		GroupPK: receiver.group.Group.PublicKey,
-		Since:   []byte("give me everything"),
+		//Since:   []byte("give me everything"),
 	}
 	cl, err := receiver.Protocol.Client.GroupMessageSubscribe(ctx, req)
 	require.NoError(t, err)
 
-	for {
-		evt, err = cl.Recv()
-		t.Log("Message Event found")
-		if err == io.EOF {
+	go func() {
+		defer wg.Done()
+		for {
+			evt, err = cl.Recv()
+			t.Log("Message Event found")
+			if err == io.EOF {
+				return
+			} else if err != nil {
+				require.NoError(t, err)
+			}
+			require.Equal(t, "test", string(evt.Message))
 			return
-		} else if err != nil {
-			require.NoError(t, err)
 		}
-
-		require.Equal(t, "test", string(evt.Message))
-		return
-	}
+	}()
 }
 
 func logTree(log string, indent int, title bool) string {

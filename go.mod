@@ -117,3 +117,5 @@ replace (
 	github.com/libp2p/go-libp2p-kbucket => github.com/libp2p/go-libp2p-kbucket v0.4.2 // specific version needed indirectly
 	github.com/lucas-clemente/quic-go => github.com/lucas-clemente/quic-go v0.18.0 // required by go1.15
 )
+
+replace berty.tech/go-orbit-db => /home/d4ryl00/go/src/go-orbit-db

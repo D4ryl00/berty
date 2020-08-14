@@ -168,6 +168,7 @@ func metadataStoreAddDeviceToGroup(ctx context.Context, m *metadataStore, g *ber
 }
 
 func (m *metadataStore) SendSecret(ctx context.Context, memberPK crypto.PubKey) (operation.Operation, error) {
+	fmt.Printf("SendSecret\n")
 	md, err := m.devKS.MemberDeviceForGroup(m.g)
 	if err != nil {
 		return nil, errcode.ErrInternal.Wrap(err)
@@ -221,6 +222,7 @@ func metadataStoreSendSecret(ctx context.Context, m *metadataStore, g *bertytype
 		return nil, errcode.ErrCryptoSignature.Wrap(err)
 	}
 
+	m.logger.Debug("SendSecret, add event")
 	return metadataStoreAddEvent(ctx, m, g, bertytypes.EventTypeGroupDeviceSecretAdded, event, sig)
 }
 
@@ -894,6 +896,10 @@ func constructorFactoryGroupMetadata(s *BertyOrbitDB) iface.StoreConstructor {
 			return nil, errcode.TODO.Wrap(err)
 		}
 
+		if options.Logger == nil {
+			options.Logger = zap.NewNop()
+		}
+
 		store := &metadataStore{
 			g:      g,
 			mks:    s.messageKeystore,
@@ -929,12 +935,12 @@ func constructorFactoryGroupMetadata(s *BertyOrbitDB) iface.StoreConstructor {
 					continue
 				}
 
-				store.logger.Debug("received payload", zap.String("payload", metaEvent.Metadata.EventType.String()))
+				store.logger.Debug("received payload", zap.String("payload", metaEvent.Metadata.EventType.String()), zap.String("event", event.String()))
 
-				store.Emit(ctx, &EventMetadataReceived{
+				/*store.Emit(ctx, &EventMetadataReceived{
 					MetaEvent: metaEvent,
 					Event:     event,
-				})
+				})*/
 				store.Emit(ctx, metaEvent)
 			}
 		}()

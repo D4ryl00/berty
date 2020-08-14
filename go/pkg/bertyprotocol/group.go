@@ -188,12 +188,14 @@ func FillMessageKeysHolderUsingNewData(ctx context.Context, gc *groupContext) <-
 		for evt := range sub {
 			e, ok := evt.(*bertytypes.GroupMetadataEvent)
 			if !ok {
+				gc.logger.Debug("FillMessageKeysHolderUsingNewData: pas bon", zap.Any("raw event", evt))
 				continue
 			}
 
 			if e.Metadata.EventType != bertytypes.EventTypeGroupDeviceSecretAdded {
 				continue
 			}
+			gc.logger.Debug("FillMessageKeysHolderUsingNewData: bon")
 
 			pk, ds, err := openDeviceSecret(e.Metadata, gc.getMemberPrivKey(), gc.Group())
 			if errcode.Is(err, errcode.ErrInvalidInput) {
@@ -209,10 +211,14 @@ func FillMessageKeysHolderUsingNewData(ctx context.Context, gc *groupContext) <-
 				continue
 			}
 
+			gc.logger.Debug("FillMessageKeysHolderUsingNewData", zap.Any("raw event", e))
+			fmt.Printf("FillMessageKeysHolderUsingNewData before: %s\n", gc.MessageKeystore().GetStore())
+
 			if err = gc.MessageKeystore().RegisterChainKey(gc.Group(), pk, ds, gc.DevicePubKey().Equals(pk)); err != nil {
 				gc.logger.Error("unable to register chain key", zap.Error(err))
 				continue
 			}
+			fmt.Printf("FillMessageKeysHolderUsingNewData after: %s\n", gc.MessageKeystore().GetStore())
 
 			ch <- pk
 		}
@@ -331,6 +337,8 @@ func activateGroupContext(ctx context.Context, gc *groupContext, selfAnnouncemen
 		}
 	}
 
+	//time.Sleep(1 * time.Second)
+	fmt.Printf("sleep\n")
 	return nil
 }
 
@@ -344,6 +352,7 @@ func SendSecretsToExistingMembers(ctx context.Context, gctx *groupContext) <-cha
 
 	go func() {
 		for _, pk := range members {
+			gctx.logger.Debug("SendSecretsToExistingMember", zap.Any("pk", pk))
 			rawPK, err := pk.Raw()
 			if err != nil {
 				gctx.logger.Error("failed to serialize pk", zap.Error(err))
@@ -375,12 +384,15 @@ func WatchNewMembersAndSendSecrets(ctx context.Context, logger *zap.Logger, gctx
 		for evt := range sub {
 			e, ok := evt.(*bertytypes.GroupMetadataEvent)
 			if !ok {
+				logger.Debug("WatchNewMemberAndSendSecrets: pas bon")
 				continue
 			}
 
 			if e.Metadata.EventType != bertytypes.EventTypeGroupMemberDeviceAdded {
+				logger.Debug("WatchNewMemberAndSendSecrets: pas bon")
 				continue
 			}
+			logger.Debug("WatchNewMemberAndSendSecrets: bon")
 
 			event := &bertytypes.GroupAddMemberDevice{}
 			if err := event.Unmarshal(e.Event); err != nil {
