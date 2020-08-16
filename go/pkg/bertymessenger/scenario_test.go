@@ -35,13 +35,16 @@ import (
 	grpc "google.golang.org/grpc"
 )
 
+var ClientNumber int = 2
+
 type BertyClient struct {
 	Protocol  *bertyprotocol.TestingProtocol
 	Messenger MessengerServiceServer
 	cancel    func()
 
-	config *bertytypes.InstanceGetConfiguration_Reply
-	group  *bertytypes.GroupInfo_Reply
+	config           *bertytypes.InstanceGetConfiguration_Reply
+	group            []*bertytypes.GroupInfo_Reply
+	shareableContact *bertytypes.ShareableContact
 }
 
 func addAsContact(ctx context.Context, t *testing.T, senders, receivers []*bertyprotocol.TestingProtocol) {
@@ -389,13 +392,12 @@ func TestScenario(t *testing.T) {
 	flush := tracer.InitTracer("localhost:14268", "berty")
 	defer flush()
 
-	num := 2
-	//clients := make([]*BertyClient, num)
+	//clients := make([]*BertyClient, ClientNumber)
 	// Start Mocked protocol
-	clients, cleanup := startMockedService(ctx, t, logger, num)
+	clients, cleanup := startMockedService(ctx, t, logger, ClientNumber)
 	defer cleanup()
 
-	/*clientsT := make([]*bertyprotocol.TestingProtocol, num)
+	/*clientsT := make([]*bertyprotocol.TestingProtocol, ClientNumber)
 	clientsT[0] = clients[0].Protocol
 	clientsT[1] = clients[1].Protocol
 	addAsContact(ctx, t, clientsT, clientsT)*/
@@ -410,82 +412,96 @@ func TestScenario(t *testing.T) {
 		}
 	}
 
-	t.Log("ShareableBertyID")
-	_, err = clients[0].Protocol.Client.ContactRequestEnable(ctx, &bertytypes.ContactRequestEnable_Request{})
-	require.NoError(t, err)
-	receiverRDV, err := clients[0].Protocol.Client.ContactRequestResetReference(ctx, &bertytypes.ContactRequestResetReference_Request{})
-	require.NoError(t, err)
-	require.NotNil(t, receiverRDV)
+	for i, client := range clients {
+		t.Logf("generate ShareableBertyID: %d", i)
+		_, err = client.Protocol.Client.ContactRequestEnable(ctx, &bertytypes.ContactRequestEnable_Request{})
+		require.NoError(t, err)
+		receiverRDV, err := client.Protocol.Client.ContactRequestResetReference(ctx, &bertytypes.ContactRequestResetReference_Request{})
+		require.NoError(t, err)
+		require.NotNil(t, receiverRDV)
 
-	contact := &bertytypes.ShareableContact{
-		PK:                   clients[0].config.AccountPK,
-		PublicRendezvousSeed: receiverRDV.PublicRendezvousSeed,
+		client.shareableContact = &bertytypes.ShareableContact{
+			PK:                   client.config.AccountPK,
+			PublicRendezvousSeed: receiverRDV.PublicRendezvousSeed,
+		}
 	}
 
-	t.Log("Send ContactRequest")
-	_, err = clients[1].Protocol.Client.ContactRequestSend(ctx, &bertytypes.ContactRequestSend_Request{
-		Contact:     contact,
-		OwnMetadata: []byte("client[1]"),
-	})
-	require.NoError(t, err)
-
-	subscribeMetaDataEvents(t, ctx, clients[0])
+	// Send contact request
+	for i, sender := range clients {
+		for j, receiver := range clients {
+			// Continue if the contact request is already sent or if the sender is the receiver
+			if i >= j {
+				continue
+			}
+			t.Logf("Send ContactRequest: %d to %d", i, j)
+			_, err = sender.Protocol.Client.ContactRequestSend(ctx, &bertytypes.ContactRequestSend_Request{
+				Contact:     receiver.shareableContact,
+				OwnMetadata: []byte("client[" + string(i) + "]"),
+			})
+			require.NoError(t, err)
+			t.Logf("subscribeMetadataEvents: %d", i)
+			subscribeMetaDataEvents(t, ctx, receiver)
+		}
+	}
 
 	// Activate the contact group
-	t.Log("GroupInfo query")
-	clients[1].group, err = clients[1].Protocol.Client.GroupInfo(ctx, &bertytypes.GroupInfo_Request{
-		ContactPK: clients[0].config.AccountPK,
-	})
-	require.NoError(t, err)
-
-	clients[0].group, err = clients[0].Protocol.Client.GroupInfo(ctx, &bertytypes.GroupInfo_Request{
-		ContactPK: clients[1].config.AccountPK,
-	})
-	require.NoError(t, err)
-
-	t.Log("Activate group1")
-	_, err = clients[1].Protocol.Client.ActivateGroup(ctx, &bertytypes.ActivateGroup_Request{
-		GroupPK: clients[1].group.Group.PublicKey,
-	})
-	require.NoError(t, err)
-
-	t.Log("Activate group0")
-	_, err = clients[0].Protocol.Client.ActivateGroup(ctx, &bertytypes.ActivateGroup_Request{
-		GroupPK: clients[0].group.Group.PublicKey,
-	})
-	require.NoError(t, err)
+	for i, sender := range clients {
+		sender.group = make([]*bertytypes.GroupInfo_Reply, len(clients))
+		for j, receiver := range clients {
+			if i == j {
+				continue
+			}
+			t.Logf("GroupInfo query: %d to %d", i, j)
+			sender.group[j], err = sender.Protocol.Client.GroupInfo(ctx, &bertytypes.GroupInfo_Request{
+				ContactPK: receiver.config.AccountPK,
+			})
+			require.NoError(t, err)
+			t.Logf("Activate group: %d to %d", i, j)
+			_, err = sender.Protocol.Client.ActivateGroup(ctx, &bertytypes.ActivateGroup_Request{
+				GroupPK: sender.group[j].Group.PublicKey,
+			})
+			require.NoError(t, err)
+		}
+	}
 
 	/*_, err = clients[0].Protocol.Client.ContactRequestDisable(ctx, &bertytypes.ContactRequestDisable_Request{})
 	require.NoError(t, err)*/
 
-	t.Log("Send message")
-	time.Sleep(1 * time.Second)
-
-	/*_, err = clients[1].Messenger.SendMessage(ctx, &SendMessage_Request{
-		GroupPK: clients[1].group.Group.PublicKey,
-		Message: "test",
-	})
-	require.NoError(t, err)*/
-
 	wg := sync.WaitGroup{}
-	wg.Add(1)
-	subscribeMessageEvents(t, ctx, clients[0], &wg)
 
-	_, err = clients[1].Protocol.Client.AppMessageSend(ctx, &bertytypes.AppMessageSend_Request{
-		GroupPK: clients[1].group.Group.PublicKey,
-		Payload: []byte("test"),
-	})
-	require.NoError(t, err)
+	for i, client := range clients {
+		for j := range client.group {
+			if i == j {
+				continue
+			}
+			wg.Add(1)
+			t.Logf("subscribeMessageEvents: %d of %d", i, j)
+			subscribeMessageEvents(t, ctx, client, j, &wg)
+		}
+	}
 
-	wg.Wait()
+	for i, sender := range clients {
+		for j := range sender.group {
+			if i == j {
+				continue
+			}
+			t.Logf("Send message: %d to %d", i, j)
 
-	t.Log("Send message")
-	_, err = clients[0].Messenger.SendMessage(ctx, &SendMessage_Request{
-		GroupPK: clients[1].group.Group.PublicKey,
-		Message: "test2",
-	})
-	require.NoError(t, err)
+			/*_, err = clients[1].Messenger.SendMessage(ctx, &SendMessage_Request{
+				GroupPK: clients[1].group.Group.PublicKey,
+				Message: "test",
+			})
+			require.NoError(t, err)*/
 
+			_, err = sender.Protocol.Client.AppMessageSend(ctx, &bertytypes.AppMessageSend_Request{
+				GroupPK: sender.group[j].Group.PublicKey,
+				Payload: []byte("test"),
+			})
+			require.NoError(t, err)
+
+			wg.Wait()
+		}
+	}
 }
 
 func subscribeMetaDataEvents(t *testing.T, ctx context.Context, client *BertyClient) {
@@ -522,13 +538,13 @@ func subscribeMetaDataEvents(t *testing.T, ctx context.Context, client *BertyCli
 	}
 }
 
-func subscribeMessageEvents(t *testing.T, ctx context.Context, receiver *BertyClient, wg *sync.WaitGroup) {
+func subscribeMessageEvents(t *testing.T, ctx context.Context, receiver *BertyClient, j int, wg *sync.WaitGroup) {
 	t.Log("Subscribe MessageEvents")
 
 	var evt *bertytypes.GroupMessageEvent
 
 	req := &bertytypes.GroupMessageSubscribe_Request{
-		GroupPK: receiver.group.Group.PublicKey,
+		GroupPK: receiver.group[j].Group.PublicKey,
 		//Since:   []byte("give me everything"),
 	}
 	cl, err := receiver.Protocol.Client.GroupMessageSubscribe(ctx, req)
