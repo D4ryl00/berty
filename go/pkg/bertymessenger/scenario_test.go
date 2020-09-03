@@ -226,10 +226,10 @@ func startMockedService(ctx context.Context, t *testing.T, logger *zap.Logger, a
 		tps[i].Protocol, tps[i].cancel = bertyprotocol.NewTestingProtocol(ctx, t, opts)
 		require.NotNil(t, tps[i])
 
-		tps[i].Messenger, err = New(tps[i].Protocol.Client, &Opts{Logger: logger.Named("messenger")})
+		/*tps[i].Messenger, err = New(tps[i].Protocol.Client, &Opts{Logger: logger.Named("messenger")})
 		if err != nil {
 			cleanupRDVP()
-		}
+		}*/
 	}
 
 	err = opts.Mocknet.LinkAll()

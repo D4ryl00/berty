@@ -1,5 +1,6 @@
 bazil.org/fuse v0.0.0-20200117225306-7b5117fecadc h1:utDghgcjE8u+EBjHOgYT+dJPcnDF05KqWMBcjuJy510=
 bazil.org/fuse v0.0.0-20200117225306-7b5117fecadc/go.mod h1:FbcW6z/2VytnFDhZfumh8Ss8zxHE6qpMP5sHTRe0EaM=
+berty.tech/go-ipfs-log v1.2.3/go.mod h1:a1ugBzwuwf+9SqINiBZ4fhuFSwZzpg1On5xt/p+5AkE=
 berty.tech/go-ipfs-log v1.2.6 h1:VBdyZgdkeIt17LS4UX6rJjmskqvfIHaOAEH9Z8aqvIM=
 berty.tech/go-ipfs-log v1.2.6/go.mod h1:4v7G/bAeHNQWqziNC9oZREEFYpSiejSE3+DB4G4nf9M=
 berty.tech/go-orbit-db v1.10.8 h1:eNbtZCmccPR29UTgZu+U12clm8bfw2hxyduuy15ImfY=
