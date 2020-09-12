@@ -394,7 +394,9 @@ func TestScenario(t *testing.T) {
 
 	//clients := make([]*BertyClient, ClientNumber)
 	// Start Mocked protocol
+	t.Log("create mocked clients")
 	clients, cleanup := startMockedService(ctx, t, logger, ClientNumber)
+	t.Log("create mocked clients finished")
 	defer cleanup()
 
 	/*clientsT := make([]*bertyprotocol.TestingProtocol, ClientNumber)
@@ -406,17 +408,22 @@ func TestScenario(t *testing.T) {
 		// Start real protocol
 		//clients[i] = startBertyService(t, logger)
 
+		t.Logf("InstanceGetConfiguration: %d", i)
 		clients[i].config, err = clients[i].Protocol.Client.InstanceGetConfiguration(ctx, &bertytypes.InstanceGetConfiguration_Request{})
+		t.Logf("InstanceGetConfiguration finished: %d", i)
 		if err != nil {
 			require.NoError(t, err)
 		}
 	}
 
 	for i, client := range clients {
-		t.Logf("generate ShareableBertyID: %d", i)
+		t.Logf("ContactRequestEnable: %d", i)
 		_, err = client.Protocol.Client.ContactRequestEnable(ctx, &bertytypes.ContactRequestEnable_Request{})
+		t.Logf("ContactRequestEnable finished: %d", i)
 		require.NoError(t, err)
+		t.Logf("ContactRequestResetReference: %d", i)
 		receiverRDV, err := client.Protocol.Client.ContactRequestResetReference(ctx, &bertytypes.ContactRequestResetReference_Request{})
+		t.Logf("ContactRequestResetReference finished: %d", i)
 		require.NoError(t, err)
 		require.NotNil(t, receiverRDV)
 
@@ -433,11 +440,12 @@ func TestScenario(t *testing.T) {
 			if i >= j {
 				continue
 			}
-			t.Logf("Send ContactRequest: %d to %d", i, j)
+			t.Logf("ContactRequestSend: %d to %d", i, j)
 			_, err = sender.Protocol.Client.ContactRequestSend(ctx, &bertytypes.ContactRequestSend_Request{
 				Contact:     receiver.shareableContact,
 				OwnMetadata: []byte("client[" + string(i) + "]"),
 			})
+			t.Logf("ContactRequestSend finished: %d to %d", i, j)
 			require.NoError(t, err)
 			t.Logf("subscribeMetadataEvents: %d", i)
 			subscribeMetaDataEvents(t, ctx, receiver)
@@ -455,11 +463,13 @@ func TestScenario(t *testing.T) {
 			sender.group[j], err = sender.Protocol.Client.GroupInfo(ctx, &bertytypes.GroupInfo_Request{
 				ContactPK: receiver.config.AccountPK,
 			})
+			t.Logf("GroupInfo query finished: %d to %d", i, j)
 			require.NoError(t, err)
 			t.Logf("Activate group: %d to %d", i, j)
 			_, err = sender.Protocol.Client.ActivateGroup(ctx, &bertytypes.ActivateGroup_Request{
 				GroupPK: sender.group[j].Group.PublicKey,
 			})
+			t.Logf("Activate group finished: %d to %d", i, j)
 			require.NoError(t, err)
 		}
 	}

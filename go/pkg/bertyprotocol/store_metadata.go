@@ -935,7 +935,7 @@ func constructorFactoryGroupMetadata(s *BertyOrbitDB) iface.StoreConstructor {
 					continue
 				}
 
-				store.logger.Debug("received payload", zap.String("payload", metaEvent.Metadata.EventType.String()), zap.String("event", event.String()))
+				store.logger.Debug("received payload", zap.String("EventType", metaEvent.Metadata.EventType.String()), zap.String("event", event.String()))
 
 				/*store.Emit(ctx, &EventMetadataReceived{
 					MetaEvent: metaEvent,

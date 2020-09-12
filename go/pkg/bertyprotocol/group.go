@@ -384,7 +384,7 @@ func WatchNewMembersAndSendSecrets(ctx context.Context, logger *zap.Logger, gctx
 		for evt := range sub {
 			e, ok := evt.(*bertytypes.GroupMetadataEvent)
 			if !ok {
-				logger.Debug("WatchNewMemberAndSendSecrets: pas bon")
+				logger.Debug("WatchNewMemberAndSendSecrets: pas bon", zap.Any("raw event", evt))
 				continue
 			}
 
@@ -392,7 +392,7 @@ func WatchNewMembersAndSendSecrets(ctx context.Context, logger *zap.Logger, gctx
 				logger.Debug("WatchNewMemberAndSendSecrets: pas bon")
 				continue
 			}
-			logger.Debug("WatchNewMemberAndSendSecrets: bon")
+			logger.Debug("WatchNewMemberAndSendSecrets: bon", zap.Any("raw event", evt))
 
 			event := &bertytypes.GroupAddMemberDevice{}
 			if err := event.Unmarshal(e.Event); err != nil {
