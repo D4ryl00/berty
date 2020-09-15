@@ -5,34 +5,22 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"math/rand"
 	"sync"
 	"testing"
 	"time"
 
 	"berty.tech/berty/v2/go/internal/ipfsutil"
-	"berty.tech/berty/v2/go/internal/tinder"
 	"berty.tech/berty/v2/go/internal/tracer"
 	"berty.tech/berty/v2/go/pkg/bertyprotocol"
 	"berty.tech/berty/v2/go/pkg/bertytypes"
 	"berty.tech/berty/v2/go/pkg/errcode"
-	datastore "github.com/ipfs/go-datastore"
-	sync_ds "github.com/ipfs/go-datastore/sync"
-	config "github.com/ipfs/go-ipfs-config"
-	"github.com/ipfs/go-ipfs/core"
-	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/peer"
-	"github.com/libp2p/go-libp2p-core/routing"
-	discovery "github.com/libp2p/go-libp2p-discovery"
-	peerstore "github.com/libp2p/go-libp2p-peerstore"
-	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	libp2p_mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/api/global"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
-	grpc "google.golang.org/grpc"
 )
 
 var ClientNumber int = 2
@@ -120,9 +108,8 @@ func addAsContact(ctx context.Context, t *testing.T, senders, receivers []*berty
 
 			// Receiver subcribes to handle incoming contact request
 			subCtx, subCancel := context.WithCancel(ctx)
-			subReceiver, err := receiver.Client.GroupMetadataSubscribe(subCtx, &bertytypes.GroupMetadataSubscribe_Request{
+			subReceiver, err := receiver.Client.GroupMetadataList(subCtx, &bertytypes.GroupMetadataList_Request{
 				GroupPK: receiverCfg.AccountGroupPK,
-				Since:   []byte("give me everything"),
 			})
 			require.NoError(t, err)
 			found := false
@@ -223,7 +210,7 @@ func startMockedService(ctx context.Context, t *testing.T, logger *zap.Logger, a
 		svcName := fmt.Sprintf("pt[%d]", i)
 		opts.Logger = logger.Named(svcName)
 
-		tps[i].Protocol, tps[i].cancel = bertyprotocol.NewTestingProtocol(ctx, t, opts)
+		tps[i].Protocol, tps[i].cancel = bertyprotocol.NewTestingProtocol(ctx, t, opts, nil)
 		require.NotNil(t, tps[i])
 
 		/*tps[i].Messenger, err = New(tps[i].Protocol.Client, &Opts{Logger: logger.Named("messenger")})
@@ -244,7 +231,8 @@ func startMockedService(ctx context.Context, t *testing.T, logger *zap.Logger, a
 	return tps, cleanupRDVP
 }
 
-func startBertyService(t *testing.T, logger *zap.Logger) *BertyClient {
+// to fix with commit 981ad42e984bacc097b40011e7300455196388a5
+/*func startBertyService(t *testing.T, logger *zap.Logger) *BertyClient {
 	t.Log("Starting service")
 	var (
 		node *core.IpfsNode
@@ -357,6 +345,7 @@ func startBertyService(t *testing.T, logger *zap.Logger) *BertyClient {
 		},
 	}
 }
+*/
 
 func parseRdvpMaddr(ctx context.Context, rdvpMaddr string, logger *zap.Logger) (*peer.AddrInfo, error) {
 	if rdvpMaddr == "" {
@@ -519,8 +508,8 @@ func subscribeMetaDataEvents(t *testing.T, ctx context.Context, client *BertyCli
 
 	var evt *bertytypes.GroupMetadataEvent
 
-	req := &bertytypes.GroupMetadataSubscribe_Request{GroupPK: client.config.AccountGroupPK}
-	cl, err := client.Protocol.Client.GroupMetadataSubscribe(ctx, req)
+	req := &bertytypes.GroupMetadataList_Request{GroupPK: client.config.AccountGroupPK}
+	cl, err := client.Protocol.Client.GroupMetadataList(ctx, req)
 	if err != nil {
 		require.NoError(t, err)
 	}
@@ -553,11 +542,10 @@ func subscribeMessageEvents(t *testing.T, ctx context.Context, receiver *BertyCl
 
 	var evt *bertytypes.GroupMessageEvent
 
-	req := &bertytypes.GroupMessageSubscribe_Request{
+	req := &bertytypes.GroupMessageList_Request{
 		GroupPK: receiver.group[j].Group.PublicKey,
-		//Since:   []byte("give me everything"),
 	}
-	cl, err := receiver.Protocol.Client.GroupMessageSubscribe(ctx, req)
+	cl, err := receiver.Protocol.Client.GroupMessageList(ctx, req)
 	require.NoError(t, err)
 
 	go func() {
