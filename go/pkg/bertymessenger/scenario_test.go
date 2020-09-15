@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"berty.tech/berty/v2/go/internal/ipfsutil"
+	"berty.tech/berty/v2/go/internal/testutil"
 	"berty.tech/berty/v2/go/internal/tracer"
 	"berty.tech/berty/v2/go/pkg/bertyprotocol"
 	"berty.tech/berty/v2/go/pkg/bertytypes"
@@ -371,15 +372,14 @@ func parseRdvpMaddr(ctx context.Context, rdvpMaddr string, logger *zap.Logger) (
 }
 
 func TestScenario(t *testing.T) {
+	var err error
 	ctx := context.Background()
-
-	logger, err := zap.NewDevelopment()
-	if err != nil {
-		require.NoError(t, err)
-	}
 
 	flush := tracer.InitTracer("localhost:14268", "berty")
 	defer flush()
+
+	logger, cleanup := testutil.Logger(t)
+	defer cleanup()
 
 	//clients := make([]*BertyClient, ClientNumber)
 	// Start Mocked protocol

@@ -36,7 +36,7 @@ func Logger(t *testing.T) (*zap.Logger, func()) {
 
 		var err error
 		loggerInstance, loggerCleanup, err = logutil.NewLogger(*logFilters, *logFormat, *logFile)
-		if !assert.NoError(t, err) {
+		if assert.Error(t, err) {
 			loggerInstance = zap.NewNop()
 			loggerCleanup = func() {}
 		}
