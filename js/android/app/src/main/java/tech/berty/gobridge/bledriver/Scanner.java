@@ -1,6 +1,8 @@
 package tech.berty.gobridge.bledriver;
 
+import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
+import android.bluetooth.le.BluetoothLeScanner;
 import android.bluetooth.le.ScanCallback;
 import android.bluetooth.le.ScanFilter;
 import android.bluetooth.le.ScanResult;
@@ -8,34 +10,107 @@ import android.bluetooth.le.ScanSettings;
 import android.content.Context;
 import android.util.Log;
 
+import java.util.Collections;
 import java.util.List;
 
-// TODO : implementation of onBatchScanResults to improve performances
 // see https://stackoverflow.com/questions/27040086/onbatchscanresults-is-not-called-in-android-ble
 
+// API level 21
 public class Scanner extends ScanCallback {
     private static final String TAG = "Scanner";
 
-    private Context mContext;
+    private final Context mContext;
+    private final BluetoothAdapter mBluetoothAdapter;
 
-    public Scanner (Context context) {
+    private ScanFilter mScanFilter;
+    private ScanSettings mScanSettings;
+    private BluetoothLeScanner mBluetoothLeScanner;
+    private boolean mInit;
+    private boolean mScanning;
+
+    public Scanner (Context context, BluetoothAdapter bluetoothAdapter) {
         mContext = context;
+        mBluetoothAdapter = bluetoothAdapter;
+        setInit(init());
     }
 
-    static ScanSettings BuildScanSettings() {
+    // Init BluetoothLeScanner object.
+    private synchronized boolean init() {
+
+        if ((mBluetoothLeScanner = mBluetoothAdapter.getBluetoothLeScanner()) == null) {
+            Log.e(TAG, "init: hardware scanning initialization failed");
+            return false;
+        }
+        mScanFilter = buildScanFilter();
+        mScanSettings = BuildScanSettings();
+        Log.i(TAG, "init: hardware scanning initialization done");
+        return true;
+    }
+
+    public boolean isInit() {
+        return mInit;
+    }
+
+    private void setInit(boolean state) {
+        mInit = state;
+    }
+
+    private ScanSettings BuildScanSettings() {
         return new ScanSettings.Builder()
-                .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
-                .build();
+            .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
+            .build();
     }
 
-    static ScanFilter buildScanFilter() {
+    private ScanFilter buildScanFilter() {
         return new ScanFilter.Builder()
-                .setServiceUuid(GattServer.P_SERVICE_UUID)
-                .build();
+            .setServiceUuid(GattServer.P_SERVICE_UUID)
+            .build();
+    }
+
+    // enable scanning
+    public boolean start() {
+        if (!isInit()) {
+            Log.e(TAG, "start: driver not init");
+            return false;
+        }
+        if (!getScanningState()) {
+            Log.i(TAG, "start scanning");
+            mBluetoothLeScanner.startScan(Collections.singletonList(mScanFilter), mScanSettings, this);
+            setScanningState(true);
+        }
+        setScanningState(true);
+        return true;
+    }
+
+    // disable scanning
+    public void stop() {
+        if (!isInit()) {
+            Log.e(TAG, "stop: driver not init");
+            return ;
+        }
+
+        if (getScanningState()) {
+            Log.i(TAG, "stop scanning");
+            mBluetoothLeScanner.stopScan(this);
+            setScanningState(false);
+        }
+    }
+
+    private void setScanningState(boolean state) {
+        mScanning = state;
+    }
+
+    // Return the status of the scanner
+    // true: scanning is enabled
+    // false: scanning is disabled
+    public boolean getScanningState() {
+        return mScanning;
     }
 
     @Override
     public void onScanFailed(int errorCode) {
+        super.onScanFailed(errorCode);
+
         String errorString;
         boolean scanning = false;
 
@@ -57,8 +132,7 @@ public class Scanner extends ScanCallback {
                 break;
         }
         Log.e(TAG, "onScanFailed: " + errorString);
-        BleDriver.setScanningState(scanning);
-        super.onScanFailed(errorCode);
+        setScanningState(scanning);
     }
 
     @Override
@@ -70,7 +144,7 @@ public class Scanner extends ScanCallback {
 
     @Override
     public void onBatchScanResults(List<ScanResult> results) {
-        Log.v(TAG, "onBatchScanResult() called with results: " + results);
+        Log.d(TAG, "onBatchScanResult() called with results: " + results);
 
         for (ScanResult result:results) {
             parseResult(result);
@@ -79,7 +153,7 @@ public class Scanner extends ScanCallback {
     }
 
     private void parseResult(ScanResult result) {
-        Log.v(TAG, "parseResult() called with device: " + result.getDevice());
+        Log.d(TAG, "parseResult() called with device: " + result.getDevice());
 
         BluetoothDevice device = result.getDevice();
         PeerDevice peerDevice = DeviceManager.get(device.getAddress());

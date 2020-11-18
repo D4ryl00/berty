@@ -10,6 +10,7 @@ import android.content.Context;
 import android.util.Log;
 
 import java.util.Arrays;
+import java.util.concurrent.CountDownLatch;
 
 public class GattServerCallback extends BluetoothGattServerCallback {
     private static final String TAG = "GattServerCallback";
@@ -20,12 +21,14 @@ public class GattServerCallback extends BluetoothGattServerCallback {
 
     private Context mContext;
     private GattServer mGattServer;
+    private CountDownLatch mDoneSignal;
 
     private byte[] mBuffer;
 
-    public GattServerCallback(Context context, GattServer gattServer) {
+    public GattServerCallback(Context context, GattServer gattServer, CountDownLatch doneSignal) {
         mContext = context;
         mGattServer = gattServer;
+        mDoneSignal = doneSignal;
     }
 
     private void addToBuffer(byte[] value) {
@@ -42,25 +45,25 @@ public class GattServerCallback extends BluetoothGattServerCallback {
     // We can enable scanner and advertiser.
     @Override
     public void onServiceAdded(int status, BluetoothGattService service) {
-        Log.d(TAG, "onServiceAdded() called in thread " + Thread.currentThread().getName());
+        Log.i(TAG, "onServiceAdded() called");
         super.onServiceAdded(status, service);
         if (status != BluetoothGatt.GATT_SUCCESS) {
             Log.e(TAG, "onServiceAdded error: failed to add service " + service);
-            mGattServer.stop();
+        } else {
+            mGattServer.setStarted(true);
         }
-        // Set the status server state to true (enabled)
-        mGattServer.setState(GattServer.State.STARTED);
-        BleDriver.setAdvertising(true);
-        BleDriver.setScanning(true);
+        mDoneSignal.countDown();
     }
 
     @Override
     public void onConnectionStateChange(BluetoothDevice device, int status, int newState) {
+        super.onConnectionStateChange(device, status, newState);
+
         Log.v(TAG, "onConnectionStateChange() called with device: " + device + " with newState: " + newState);
+        PeerDevice peerDevice = DeviceManager.get(device.getAddress());
 
         if (newState == BluetoothProfile.STATE_CONNECTED) {
             Log.v(TAG, "connected");
-            PeerDevice peerDevice = DeviceManager.get(device.getAddress());
 
             if (peerDevice == null) {
                 Log.i(TAG, "onConnectionStateChange(): a new device is connected: " + device.getAddress());
@@ -72,6 +75,12 @@ public class GattServerCallback extends BluetoothGattServerCallback {
                 // Everything is handled in this method: GATT connection/reconnection and handshake if necessary
                 peerDevice.asyncConnectionToDevice();
             }
+        } else {
+            Log.v(TAG, "disconnected");
+            if (peerDevice != null) {
+                DeviceManager.closeDeviceConnection(device.getAddress());
+                BleInterface.BLEHandleLostPeer(peerDevice.getPeerID());
+            }
         }
     }
 
@@ -80,6 +89,8 @@ public class GattServerCallback extends BluetoothGattServerCallback {
                                             int requestId,
                                             int offset,
                                             BluetoothGattCharacteristic characteristic) {
+        super.onCharacteristicReadRequest(device, requestId, offset, characteristic);
+
         Log.d(TAG, "onCharacteristicReadRequest() called");
         boolean full = false;
         PeerDevice peerDevice;
@@ -125,10 +136,11 @@ public class GattServerCallback extends BluetoothGattServerCallback {
                                              byte[] value) {
         super.onCharacteristicWriteRequest(device, requestId, characteristic, prepareWrite,
                 responseNeeded, offset, value);
+
+        Log.d(TAG, "onCharacteristicWriteRequest() called");
         PeerDevice peerDevice;
         boolean status = false;
 
-        Log.d(TAG, "onCharacteristicWriteRequest() called");
         if ((peerDevice = DeviceManager.get(device.getAddress())) == null) {
             Log.e(TAG, "onCharacteristicWriteRequest() error: device not found");
         } else if (peerDevice.getPeerID() == null) {
@@ -141,7 +153,7 @@ public class GattServerCallback extends BluetoothGattServerCallback {
                     status = true;
                 } else {
                     status = peerDevice.updateWriterValue(new String(value));
-                    JavaToGo.ReceiveFromPeer(peerDevice.getPeerID().toString(), value);
+                    BleInterface.BLEReceiveFromPeer(peerDevice.getPeerID().toString(), value);
                 }
             }
         }
@@ -159,6 +171,8 @@ public class GattServerCallback extends BluetoothGattServerCallback {
     // Thus we know we can handle data put in the buffer.
     @Override
     public void onExecuteWrite(BluetoothDevice device, int requestId, boolean execute) {
+        super.onExecuteWrite(device, requestId, execute);
+
         Log.d(TAG, "onExecuteWrite called(): " + execute);
         PeerDevice peerDevice;
 
@@ -171,7 +185,7 @@ public class GattServerCallback extends BluetoothGattServerCallback {
                     mBuffer = null;
                     return ;
                 }
-                JavaToGo.ReceiveFromPeer(peerDevice.getPeerID().toString(), mBuffer);
+                BleInterface.BLEReceiveFromPeer(peerDevice.getPeerID().toString(), mBuffer);
             }
         }
         mBuffer = null;
@@ -181,6 +195,8 @@ public class GattServerCallback extends BluetoothGattServerCallback {
 
     @Override
     public void onMtuChanged(BluetoothDevice device, int mtu) {
+        super.onMtuChanged(device, mtu);
+
         Log.d(TAG, "onMtuChanged() called: " + mtu);
         PeerDevice peerDevice;
         if ((peerDevice = DeviceManager.get(device.getAddress())) == null) {

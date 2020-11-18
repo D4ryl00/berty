@@ -15,7 +15,6 @@ public class PeerManager {
         mContext = context;
     }
 
-
     public static synchronized void set(String key, boolean ready, PeerDevice peerDevice) {
         Log.d(TAG, "set() called");
         Peer peer;
@@ -31,7 +30,7 @@ public class PeerManager {
         }
         if (ready && !peer.isAlreadyFound()) {
             peer.setAlreadyFound(true);
-            JavaToGo.HandleFoundPeer(key);
+            BleInterface.BLEHandleFoundPeer(key);
         }
     }
 

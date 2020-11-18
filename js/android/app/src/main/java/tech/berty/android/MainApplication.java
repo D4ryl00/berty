@@ -17,6 +17,11 @@ import com.wix.interactable.Interactable; // remove when https://github.com/wix/
 import com.shakebugs.shake.Shake;
 
 public class MainApplication extends Application implements ReactApplication {
+  private static Context context;
+
+  public static Context getAppContext() {
+      return MainApplication.context;
+  }
 
   private final ReactNativeHost mReactNativeHost =
       new ReactNativeHost(this) {
@@ -50,6 +55,9 @@ public class MainApplication extends Application implements ReactApplication {
   @Override
   public void onCreate() {
     super.onCreate();
+
+    MainApplication.context = getApplicationContext();
+
     SoLoader.init(this, /* native exopackage */ false);
     initializeFlipper(this, getReactNativeHost().getReactInstanceManager());
     if (BuildConfig.DEBUG) {

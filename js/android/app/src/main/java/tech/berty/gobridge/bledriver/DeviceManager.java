@@ -36,6 +36,13 @@ public class DeviceManager {
         return peerDevice;
     }
 
+    public static synchronized void closeDeviceConnection(String key) {
+        PeerDevice peerDevice;
+        if ((peerDevice = DeviceManager.get(key)) != null) {
+            peerDevice.close();
+        }
+    }
+
     public static synchronized void closeAllDeviceConnections() {
         Iterator iterator = mPeerDevices.entrySet().iterator();
         while (iterator.hasNext()) {
