@@ -8,14 +8,14 @@ type NativeBleDriver interface {
 	proximity.NativeDriver
 }
 
-type ProximityTransport struct {
+type ProximityTransport interface {
 	proximity.ProximityTransport
 }
 
-func GetProximityTransport(protocolName string) *ProximityTransport {
+func GetProximityTransport(protocolName string) ProximityTransport {
 	t, ok := proximity.TransportMap.Load(protocolName)
 	if ok {
-		return t.(*ProximityTransport)
+		return t.(proximity.ProximityTransport)
 	}
 	return nil
 }
