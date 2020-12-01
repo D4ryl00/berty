@@ -5,11 +5,15 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"sync"
 	"time"
 
+	peer "github.com/libp2p/go-libp2p-core/peer"
+	tpt "github.com/libp2p/go-libp2p-core/transport"
 	ma "github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr/net"
 	"github.com/pkg/errors"
+	"go.uber.org/zap"
 )
 
 // Conn is a manet.Conn.
@@ -25,31 +29,84 @@ type Conn struct {
 	localMa  ma.Multiaddr
 	remoteMa ma.Multiaddr
 
+	ready bool
+	sync.Mutex
+	cache *RingBufferMap
+
 	ctx       context.Context
 	cancel    func()
 	transport *proximityTransport
 }
 
+// newConn returns an inbound or outbound tpt.CapableConn upgraded from a Conn.
+func newConn(ctx context.Context, t *proximityTransport, remoteMa ma.Multiaddr,
+	remotePID peer.ID, inbound bool) (tpt.CapableConn, error) {
+	t.logger.Debug("newConn()", zap.String("remoteMa", remoteMa.String()), zap.Bool("inbound", inbound))
+
+	// Creates a manet.Conn
+	pr, pw := io.Pipe()
+	connCtx, cancel := context.WithCancel(t.listener.ctx)
+
+	maconn := &Conn{
+		readIn:    pw,
+		readOut:   pr,
+		localMa:   t.listener.localMa,
+		remoteMa:  remoteMa,
+		ready:     false,
+		cache:     NewRingBufferMap(t.logger, 128),
+		ctx:       connCtx,
+		cancel:    cancel,
+		transport: t,
+	}
+
+	// Flush the transport cache
+	go maconn.flushCache(t.cache)
+
+	// Stores the conn in connMap, will be deleted during conn.Close()
+	t.connMap.Store(maconn.RemoteAddr().String(), maconn)
+
+	// Returns an upgraded CapableConn (muxed, addr filtered, secured, etc...)
+	if inbound {
+		return t.upgrader.UpgradeInbound(ctx, t, maconn)
+	}
+	return t.upgrader.UpgradeOutbound(ctx, t, maconn, remotePID)
+}
+
 // Read reads data from the connection.
 // Timeout handled by the native driver.
 func (c *Conn) Read(payload []byte) (n int, err error) {
+	c.transport.logger.Debug("Conn.Read", zap.String("remoteAddr", c.RemoteAddr().String()))
 	if c.ctx.Err() != nil {
+		c.transport.logger.Error("Conn.Read failed: conn already closed")
 		return 0, fmt.Errorf("error: Conn.Read failed: conn already closed")
 	}
 
 	n, err = c.readOut.Read(payload)
 	if err != nil {
+		c.transport.logger.Error("Conn.Read failed: native read failed")
 		err = errors.Wrap(err, "error: Conn.Read failed: native read failed")
+	} else {
+		c.transport.logger.Debug("Conn.Read successful")
 	}
-
 	return n, err
 }
 
 // Write writes data to the connection.
 // Timeout handled by the native driver.
 func (c *Conn) Write(payload []byte) (n int, err error) {
+	c.transport.logger.Debug("Conn.Write", zap.String("remoteAddr", c.RemoteAddr().String()), zap.Any("payload", payload))
 	if c.ctx.Err() != nil {
 		return 0, fmt.Errorf("error: Conn.Write failed: conn already closed")
+	}
+
+	// Set connection as ready and flush cached payloads
+	if !c.isReady() {
+		c.Lock()
+		if !c.ready {
+			c.ready = true
+			c.flushCache(c.cache)
+		}
+		c.Unlock()
 	}
 
 	// Write to the peer's device using native driver.
@@ -57,6 +114,7 @@ func (c *Conn) Write(payload []byte) (n int, err error) {
 		c.transport.logger.Debug("Conn.Write failed")
 		return 0, fmt.Errorf("error: Conn.Write failed: native write failed")
 	}
+	c.transport.logger.Debug("Conn.Write successful")
 
 	return len(payload), nil
 }
@@ -77,6 +135,26 @@ func (c *Conn) Close() error {
 	return nil
 }
 
+// flushCache gets cached payloads and puts in the pipe reader
+func (c *Conn) flushCache(cache *RingBufferMap) {
+	payloads := cache.Flush(c.RemoteAddr().String())
+	for payload := range payloads {
+		_, err := c.readIn.Write(payload)
+		if err != nil {
+			c.transport.logger.Error("flushCache: write pipe error", zap.Error(err))
+		} else {
+			c.transport.logger.Debug("flushCache: successful write pipe")
+		}
+	}
+}
+
+// isReady tells if  libp2p is ready to accept input connections
+func (c *Conn) isReady() bool {
+	c.Lock()
+	defer c.Unlock()
+	return c.ready
+}
+
 // LocalAddr returns the local network address.
 func (c *Conn) LocalAddr() net.Addr {
 	lAddr, _ := c.LocalMultiaddr().ValueForProtocol(c.transport.driver.ProtocolCode())
@@ -86,7 +164,7 @@ func (c *Conn) LocalAddr() net.Addr {
 	}
 }
 
-// LocalAddr returns the remote network address.
+// RemoteAddr returns the remote network address.
 func (c *Conn) RemoteAddr() net.Addr {
 	rAddr, _ := c.RemoteMultiaddr().ValueForProtocol(c.transport.driver.ProtocolCode())
 	return &Addr{
@@ -104,6 +182,12 @@ func (c *Conn) LocalMultiaddr() ma.Multiaddr { return c.localMa }
 func (c *Conn) RemoteMultiaddr() ma.Multiaddr { return c.remoteMa }
 
 // Noop deadline methods, handled by the native driver.
-func (c *Conn) SetDeadline(t time.Time) error      { return nil }
-func (c *Conn) SetReadDeadline(t time.Time) error  { return nil }
+
+// SetDeadline does nothing
+func (c *Conn) SetDeadline(t time.Time) error { return nil }
+
+// SetReadDeadline does nothing
+func (c *Conn) SetReadDeadline(t time.Time) error { return nil }
+
+// SetWriteDeadline does nothing
 func (c *Conn) SetWriteDeadline(t time.Time) error { return nil }
