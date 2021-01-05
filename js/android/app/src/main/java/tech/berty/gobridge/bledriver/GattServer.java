@@ -22,7 +22,7 @@ import static android.bluetooth.BluetoothGattService.SERVICE_TYPE_PRIMARY;
 import static android.content.Context.BLUETOOTH_SERVICE;
 
 public class GattServer {
-    private final String TAG = "GattServer";
+    private final String TAG = "bty.ble.GattServer";
 
     // GATT service UUID
     static final UUID SERVICE_UUID = UUID.fromString("A06C6AB8-886F-4D56-82FC-2CF8610D668D");
@@ -40,7 +40,6 @@ public class GattServer {
     private CountDownLatch mDoneSignal;
     private GattServerCallback mGattServerCallback;
     private BluetoothGattServer mBluetoothGattServer;
-    private Thread mGattServerThread;
     private volatile boolean mInit = false;
     private volatile boolean mStarted = false;
 
@@ -78,30 +77,25 @@ public class GattServer {
 
         if (!mInit) {
             Log.e(TAG, "start: GATT service not init");
-            return true;
+            return false;
         }
         if (isStarted()) {
             Log.i(TAG, "start: GATT service already started");
             return true;
         }
-        mGattServerThread = new Thread(new Runnable() {
-            @Override
-            public void run() {
-                mLock.lock();
-                try {
-                    mBluetoothGattServer = mBluetoothManager.openGattServer(mContext, mGattServerCallback);
-                } finally {
-                    mLock.unlock();
-                }
-                mPeerIDCharacteristic.setValue(peerID);
-                mWriterCharacteristic.setValue("");
-                if (!mBluetoothGattServer.addService(mService)) {
-                    Log.e(TAG, "setupGattServer error: cannot add a new service");
-                    mBluetoothGattServer = null;
-                }
-            }
-        });
-        mGattServerThread.start();
+
+        mGattServerCallback.setLocalPID(peerID);
+
+        mBluetoothGattServer = mBluetoothManager.openGattServer(mContext, mGattServerCallback);
+
+        mPeerIDCharacteristic.setValue(peerID);
+        mWriterCharacteristic.setValue("");
+        if (!mBluetoothGattServer.addService(mService)) {
+            Log.e(TAG, "setupGattServer error: cannot add a new service");
+            mBluetoothGattServer.close();
+            mBluetoothGattServer = null;
+            return false;
+        }
 
         // wait that service starts
         try {

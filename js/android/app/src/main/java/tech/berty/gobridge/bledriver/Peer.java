@@ -3,33 +3,18 @@ package tech.berty.gobridge.bledriver;
 import android.util.Log;
 
 public class Peer {
-    private static final String TAG = "Peer";
+    private static final String TAG = "bty.ble.Peer";
 
     private String mPeerID;
-    private boolean mIsReady = false;
-    private boolean mAlreadyFound = false;
-    private PeerDevice mPeerDevice;
 
-    public Peer(String peerID, boolean ready, PeerDevice peerDevice) {
+    private PeerDevice mPeerDevice = null;
+
+    public Peer(String peerID) {
         mPeerID = peerID;
-        mIsReady = ready;
-        mPeerDevice = peerDevice;
     }
 
     public synchronized String getPeerID() {
         return mPeerID;
-    }
-
-    public synchronized boolean isReady() {
-        return (mIsReady == true);
-    }
-
-    public synchronized void setAlreadyFound(boolean status) {
-        mAlreadyFound = status;
-    }
-
-    public synchronized boolean isAlreadyFound() {
-        return mAlreadyFound == true;
     }
 
     public synchronized void setPeerDevice(PeerDevice peerDevice) {
@@ -40,11 +25,10 @@ public class Peer {
         return mPeerDevice;
     }
 
-    // if the device is ready, send a signal to HandlePeerFound
-    public synchronized void setIsReady(boolean ready) {
-        Log.d(TAG, "setIsReady() called: " + ready);
-        if (ready && !mIsReady) {
-            mIsReady = true;
+    public synchronized boolean isReady() {
+        if (mPeerDevice.isServerReady() && mPeerDevice.isClientReady()) {
+            return true;
         }
+        return false;
     }
 }

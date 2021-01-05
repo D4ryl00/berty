@@ -23,7 +23,7 @@ import java.util.concurrent.CountDownLatch;
 // Make the BleDriver class a Singleton
 // see https://medium.com/@kevalpatel2106/how-to-make-the-perfect-singleton-de6b951dfdb0
 public class BleDriver {
-    private static final String TAG = "BleDriver";
+    private static final String TAG = "bty.ble.BleDriver";
 
     private static volatile BleDriver mBleDriver;
 
@@ -133,27 +133,24 @@ public class BleDriver {
             return ;
         }
 
-        if (isInit()) {
-            if (!mGattServer.start(localPeerID)) {
-               return ;
-            }
-
-            setStarted(true);
-
-            if (!mAdvertiser.start()) {
-                Log.e(TAG, "StartBleDriver: failed to start advertising");
-                StopBleDriver();
-                return ;
-            }
-
-            if (!mScanner.start()) {
-                Log.e(TAG, "StartBleDriver: failed to start scanning");
-                StopBleDriver();
-                return ;
-            }
-
-            Log.i(TAG, "StartBleDriver: initDriver completed");
+        if (!mGattServer.start(localPeerID)) {
+           return ;
         }
+        setStarted(true);
+
+        if (!mAdvertiser.start()) {
+            Log.e(TAG, "StartBleDriver: failed to start advertising");
+            StopBleDriver();
+            return ;
+        }
+
+        if (!mScanner.start(localPeerID)) {
+            Log.e(TAG, "StartBleDriver: failed to start scanning");
+            StopBleDriver();
+            return ;
+        }
+
+        Log.i(TAG, "StartBleDriver: initDriver completed");
     }
 
     public synchronized void StopBleDriver() {

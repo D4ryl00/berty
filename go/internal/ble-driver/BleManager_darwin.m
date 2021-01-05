@@ -269,6 +269,7 @@ static NSString* const __nonnull PEER_ID_UUID = @"0EF50D30-E208-4315-B323-D05E0A
             // adding info given by CBCentralManager (scanning)
             [nDevice setPeripheral:peripheral central:self];
         } else {
+			// TODO: retest if bDevices is still null after @synchronized
             @synchronized (self.bDevices) {
                 nDevice = [[BertyDevice alloc]initWithPeripheral:peripheral central:self];
                 [self.bDevices addObject:nDevice];

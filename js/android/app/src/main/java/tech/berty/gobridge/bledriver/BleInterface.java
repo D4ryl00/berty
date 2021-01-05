@@ -8,7 +8,7 @@ import bertybridge.NativeBleDriver;
 import bertybridge.ProximityTransport;
 
 public class BleInterface implements NativeBleDriver {
-    private static final String TAG = "BleInterface";
+    private static final String TAG = "bty.ble.BleInterface";
 
     public static final String DefaultAddr = "/ble/Qmeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
     public static final int ProtocolCode = 0x0042;

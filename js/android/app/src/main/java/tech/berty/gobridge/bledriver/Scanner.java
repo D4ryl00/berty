@@ -17,10 +17,12 @@ import java.util.List;
 
 // API level 21
 public class Scanner extends ScanCallback {
-    private static final String TAG = "Scanner";
+    private static final String TAG = "bty.ble.Scanner";
 
     private final Context mContext;
     private final BluetoothAdapter mBluetoothAdapter;
+
+    private String mPeerID;
 
     private ScanFilter mScanFilter;
     private ScanSettings mScanSettings;
@@ -58,6 +60,7 @@ public class Scanner extends ScanCallback {
     private ScanSettings BuildScanSettings() {
         return new ScanSettings.Builder()
             .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
+            //.setNumOfMatches(ScanSettings.MATCH_NUM_FEW_ADVERTISEMENT)
             .build();
     }
 
@@ -68,13 +71,14 @@ public class Scanner extends ScanCallback {
     }
 
     // enable scanning
-    public boolean start() {
+    public boolean start(String peerID) {
         if (!isInit()) {
             Log.e(TAG, "start: driver not init");
             return false;
         }
         if (!getScanningState()) {
             Log.i(TAG, "start scanning");
+            mPeerID = peerID;
             mBluetoothLeScanner.startScan(Collections.singletonList(mScanFilter), mScanSettings, this);
             setScanningState(true);
         }
@@ -137,7 +141,7 @@ public class Scanner extends ScanCallback {
 
     @Override
     public void onScanResult(int callbackType, ScanResult result) {
-        Log.d(TAG, "onScanResult called with result: " + result);
+        Log.v(TAG, "onScanResult called with result: " + result);
         parseResult(result);
         super.onScanResult(callbackType, result);
     }
@@ -152,21 +156,19 @@ public class Scanner extends ScanCallback {
         super.onBatchScanResults(results);
     }
 
-    private void parseResult(ScanResult result) {
-        Log.d(TAG, "parseResult() called with device: " + result.getDevice());
-
+    private synchronized void parseResult(ScanResult result) {
         BluetoothDevice device = result.getDevice();
         PeerDevice peerDevice = DeviceManager.get(device.getAddress());
 
         if (peerDevice == null) {
             Log.i(TAG, "parseResult() scanned a new device: " + device.getAddress());
-            peerDevice = new PeerDevice(mContext, device);
+            peerDevice = new PeerDevice(mContext, device, mPeerID);
             DeviceManager.addDevice(peerDevice);
         }
         if (peerDevice.isDisconnected()) {
             // Everything is handled in this method: GATT connection/reconnection and handshake if necessary
             peerDevice.setState(PeerDevice.CONNECTION_STATE.CONNECTING);
-            peerDevice.asyncConnectionToDevice();
+            peerDevice.connectToDevice();
         }
     }
 }

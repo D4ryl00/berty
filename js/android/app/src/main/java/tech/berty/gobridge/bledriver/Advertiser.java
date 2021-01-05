@@ -14,7 +14,7 @@ import java.util.concurrent.locks.ReentrantLock;
 
 // API level 21
 public class Advertiser extends AdvertiseCallback {
-    private static final String TAG = "Advertiser";
+    private static final String TAG = "bty.ble.Advertiser";
 
     private AdvertiseSettings mAdvertiseSettings;
     private AdvertiseData mAdvertiseData;
