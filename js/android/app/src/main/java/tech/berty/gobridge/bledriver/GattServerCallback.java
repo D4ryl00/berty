@@ -10,6 +10,7 @@ import android.content.Context;
 import android.util.Log;
 
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.concurrent.CountDownLatch;
 
 public class GattServerCallback extends BluetoothGattServerCallback {
@@ -64,7 +65,7 @@ public class GattServerCallback extends BluetoothGattServerCallback {
     public void onConnectionStateChange(BluetoothDevice device, int status, int newState) {
         super.onConnectionStateChange(device, status, newState);
 
-        Log.d(TAG, "onConnectionStateChange() called with device: " + device + " with newState: " + newState);
+        /*Log.d(TAG, "onConnectionStateChange() called with device: " + device + " with newState: " + newState);
         PeerDevice peerDevice = DeviceManager.get(device.getAddress());
 
         if (newState == BluetoothProfile.STATE_CONNECTED) {
@@ -83,10 +84,10 @@ public class GattServerCallback extends BluetoothGattServerCallback {
         } else {
             Log.d(TAG, "disconnected");
             if (peerDevice != null) {
-                DeviceManager.closeDeviceConnection(device.getAddress());
+                peerDevice.setState(PeerDevice.CONNECTION_STATE.DISCONNECTED);
                 BleInterface.BLEHandleLostPeer(peerDevice.getRemotePID());
             }
-        }
+        }*/
     }
 
     @Override
@@ -109,18 +110,19 @@ public class GattServerCallback extends BluetoothGattServerCallback {
         if (characteristic.getUuid().equals(GattServer.PEER_ID_UUID)) {
             String peerID = characteristic.getStringValue(0);
             if ((peerID.length() - offset) <= peerDevice.getMtu() - ATT_HEADER_READ_SIZE) {
-                Log.d(TAG, "onCharacteristicReadRequest(): mtu is big enough (" + (peerID.length() - offset) + " bytes to read)");
+                Log.d(TAG, "onCharacteristicReadRequest: mtu is big enough (" + (peerID.length() - offset) + " bytes to read)");
                 full = true;
             } else {
-                Log.d(TAG, "onCharacteristicReadRequest(): mtu is too small (" + (peerID.length() - offset) + " bytes to read)");
+                Log.d(TAG, "onCharacteristicReadRequest: mtu is too small (" + (peerID.length() - offset) + " bytes to read)");
             }
             value = Arrays.copyOfRange(peerID.getBytes(), offset, peerID.length());
             mGattServer.getGattServer().sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, offset, value);
             if (full) {
-                Log.d(TAG, "onCharacteristicReadRequest(): finished");
-                // do nothing
+                Log.d(TAG, "onCharacteristicReadRequest: finished");
+                peerDevice.handleServerPIDSent();
             }
         } else {
+            Log.e(TAG, "onCharacteristicReadRequest: try to read to a wrong characteristic");
             mGattServer.getGattServer().sendResponse(device, requestId, BluetoothGatt.GATT_FAILURE,
                     offset, null);
         }
@@ -142,30 +144,23 @@ public class GattServerCallback extends BluetoothGattServerCallback {
         super.onCharacteristicWriteRequest(device, requestId, characteristic, prepareWrite,
                 responseNeeded, offset, value);
 
-        Log.d(TAG, "onCharacteristicWriteRequest() called");
+        Log.d(TAG, "onCharacteristicWriteRequest: called");
         PeerDevice peerDevice;
         boolean status = false;
 
         if ((peerDevice = DeviceManager.get(device.getAddress())) == null) {
-            Log.e(TAG, "onCharacteristicWriteRequest() error: device not found");
+            Log.e(TAG, "onCharacteristicWriteRequest: device not found");
         } else {
             if (characteristic.getUuid().equals(GattServer.WRITER_UUID)) {
-                Log.d(TAG, "onCharacteristicWriteRequest(): value is \"" + new String(value) + "\", size: " + value.length + ", offset: " + offset + ", preparedWrite: " + prepareWrite + ", needResponse: " + responseNeeded);
+                Log.d(TAG, "onCharacteristicWriteRequest: raw value: " + Base64.getEncoder().encodeToString(value) + ", size: " + value.length + ", offset: " + offset + ", preparedWrite: " + prepareWrite + ", needResponse: " + responseNeeded);
                 if (prepareWrite) {
-                    addToBuffer(value);
+                    addToBuffer(value); // TODO: put a buffer for each device
                     status = true;
                 } else {
-                    if (!peerDevice.isServerReady()) {
-                        if (peerDevice.getRemotePID() == null) {
-                            peerDevice.setRemotePID(new String(value));
-                        }
-                        peerDevice.handleReceivedRemotePID();
-                        status = true;
-                    } else {
-                        status = peerDevice.updateWriterValue(new String(value));
-                        BleInterface.BLEReceiveFromPeer(peerDevice.getRemotePID(), value);
-                    }
+                    status = peerDevice.handleServerDataReceived(value);
                 }
+            } else {
+                Log.e(TAG, "onCharacteristicWriteRequest: try to write to a wrong characteristic");
             }
         }
         if (responseNeeded && status) {
@@ -186,22 +181,26 @@ public class GattServerCallback extends BluetoothGattServerCallback {
 
         Log.d(TAG, "onExecuteWrite called(): " + execute);
         PeerDevice peerDevice;
+        boolean status = true;
 
         if (execute) {
             if (mBuffer != null) {
-                if (((peerDevice = DeviceManager.get(device.getAddress())) == null)
-                        || !peerDevice.updateWriterValue(new String(mBuffer))) {
-                    mGattServer.getGattServer().sendResponse(device, requestId, BluetoothGatt.GATT_FAILURE,
-                            0, null);
-                    mBuffer = null;
-                    return ;
+                if ((peerDevice = DeviceManager.get(device.getAddress())) == null) {
+                    Log.e(TAG, "onExecuteWrite: device not found");
+                    status = false;
+                } else {
+                    status = peerDevice.handleServerDataReceived(mBuffer);
                 }
-                BleInterface.BLEReceiveFromPeer(peerDevice.getRemotePID(), mBuffer);
             }
         }
         mBuffer = null;
-        mGattServer.getGattServer().sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS,
+        if (!status) {
+            mGattServer.getGattServer().sendResponse(device, requestId, BluetoothGatt.GATT_FAILURE,
                 0, null);
+        } else {
+            mGattServer.getGattServer().sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS,
+                0, null);
+        }
     }
 
     @Override

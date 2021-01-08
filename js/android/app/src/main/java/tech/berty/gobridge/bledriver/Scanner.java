@@ -60,7 +60,7 @@ public class Scanner extends ScanCallback {
     private ScanSettings BuildScanSettings() {
         return new ScanSettings.Builder()
             .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
-            //.setNumOfMatches(ScanSettings.MATCH_NUM_FEW_ADVERTISEMENT)
+            //.setNumOfMatches(ScanSettings.MATCH_NUM_ONE_ADVERTISEMENT)
             .build();
     }
 

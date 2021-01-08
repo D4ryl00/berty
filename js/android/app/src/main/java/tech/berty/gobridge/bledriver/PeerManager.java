@@ -15,25 +15,32 @@ public class PeerManager {
         mContext = context;
     }
 
-    public static synchronized void register(String key, PeerDevice peerDevice) {
+    public static synchronized Peer register(String peerID, PeerDevice peerDevice) {
         Log.d(TAG, "register() called");
         Peer peer;
 
-        if ((peer = mPeers.get(key)) == null) {
+        if ((peer = mPeers.get(peerID)) == null) {
             Log.d(TAG, "register(): peer unknown");
-            peer = new Peer(key);
+            peer = new Peer(peerID);
             peer.setPeerDevice(peerDevice);
-            mPeers.put(key, peer);
+            mPeers.put(peerID, peer);
         } else {
-            Log.d(TAG, "register(): peer known");
-            if (peer.isReady()) {
-                Log.d(TAG, "register(): peer ready");
-                BleInterface.BLEHandleFoundPeer(key);
-            }
+            Log.d(TAG, "register(): peer already known");
+        }
+        return peer;
+    }
+
+    public static synchronized void unregister(String peerID) {
+        Log.d(TAG, "unregister() called");
+        Peer peer;
+
+        if ((peer = mPeers.get(peerID)) != null) {
+            Log.d(TAG, "unregister: peer removed");
+            mPeers.remove(peerID);
         }
     }
 
-    public static synchronized Peer get(String key) {
-        return mPeers.get(key);
+    public static synchronized Peer get(String peerID) {
+        return mPeers.get(peerID);
     }
 }

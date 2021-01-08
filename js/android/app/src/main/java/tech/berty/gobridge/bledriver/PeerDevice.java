@@ -40,11 +40,13 @@ public class PeerDevice {
     private final Object mLockMtu = new Object();
     private final Object mLockClient = new Object();
     private final Object mLockServer = new Object();
+    private final Object mLockPeer = new Object();
 
     private BluetoothGattService mBertyService;
     private BluetoothGattCharacteristic mPeerIDCharacteristic;
     private BluetoothGattCharacteristic mWriterCharacteristic;
 
+    private Peer mPeer;
     private String mRemotePID;
     private String mLocalPID;
     private boolean mClientReady = false;
@@ -75,7 +77,7 @@ public class PeerDevice {
     // https://android.jlelse.eu/lessons-for-first-time-android-bluetooth-le-developers-i-learned-the-hard-way-fee07646624
     // API level 23
     public void connectToDevice() {
-        Log.d(TAG, "asyncConnectionToDevice() called");
+        Log.d(TAG, "connectToDevice: " + getMACAddress());
 
         if (!isConnected()) {
             setBluetoothGatt(mBluetoothDevice.connectGatt(mContext, false,
@@ -146,7 +148,7 @@ public class PeerDevice {
     }
 
     public void setRemotePID(String peerID) {
-        Log.d(TAG, "setPeerID called: " + peerID);
+        Log.d(TAG, "setPeerID: " + peerID + ", device: " + getMACAddress());
         synchronized (mLockRemotePID) {
             mRemotePID = peerID;
         }
@@ -158,29 +160,71 @@ public class PeerDevice {
         }
     }
 
-    public void handleReceivedRemotePID() {
-        Log.d(TAG, "handleReceivedRemotePID called");
+    public void setPeer(Peer peer) {
+        synchronized (mLockPeer) {
+            mPeer = peer;
+        }
+    }
+
+    public Peer getPeer() {
+        synchronized (mLockPeer) {
+            return mPeer;
+        }
+    }
+
+    public void handleServerPIDSent() {
+        Log.d(TAG, "handleServerPIDSent: device: " + getMACAddress());
+        Peer peer;
+
+        if (!isServerReady()) {
+            setServerReady(true);
+            if ((peer = getPeer()) != null) {
+                peer.CallFoundPeer();
+            }
+        } else {
+            Log.e(TAG, "handleServerPIDSent: PID already sent, device: " + getMACAddress());
+            close();
+        }
+    }
+
+    public void handleReceivedRemotePID(String peerID) {
+        Log.d(TAG, "handleReceivedRemotePID: device: " + getMACAddress());
+        Peer peer;
+
 
         // test if a PeerDevice already exist for this remote PID
-        if (getRemotePID() != null & PeerManager.get(getRemotePID()).getPeerDevice() != null) {
-            Log.i(TAG, "handleReceivedRemotePID(): a connection already exists");
-            DeviceManager.closeDeviceConnection(mBluetoothDevice.getAddress());
+        if (PeerManager.get(peerID) != null) {
+            Log.i(TAG, "handleReceivedRemotePID(): a connection already exists, close connection, device: " + getMACAddress());
+            close();
             return ;
         }
 
-        setServerReady();
-        PeerManager.register(mRemotePID, this);
+        setRemotePID(peerID);
+        setClientReady(true);
+        peer = PeerManager.register(peerID, this);
+        setPeer(peer);
+        peer.CallFoundPeer();
+    }
+
+    public boolean handleServerDataReceived(byte[] data) {
+        boolean status = false;
+
+        if (updateWriterValue(new String(data))) {
+            status = true;
+        }
+        BleInterface.BLEReceiveFromPeer(getRemotePID(), data);
+        return status;
     }
 
     public void handleWriteLocalPID() {
         Log.d(TAG, "handleWriteLocalPID called");
-        setClientReady();
+        setClientReady(true);
         PeerManager.register(mRemotePID, this);
     }
 
-    public void setClientReady() {
+    public void setClientReady(boolean state) {
         synchronized (mLockClient) {
-            mClientReady = true;
+            mClientReady = state;
         }
     }
 
@@ -190,9 +234,9 @@ public class PeerDevice {
         }
     }
 
-    public void setServerReady() {
+    public void setServerReady(boolean state) {
         synchronized (mLockServer) {
-            mServerReady = true;
+            mServerReady = state;
         }
     }
 
@@ -206,44 +250,52 @@ public class PeerDevice {
         if (isConnected()) {
             getBluetoothGatt().close();
             setState(CONNECTION_STATE.DISCONNECTING);
+            setClientReady(false);
+            setServerReady(false);
+            setPeer(null);
+            PeerManager.unregister(mRemotePID);
         }
     }
 
     private boolean takeBertyService(List<BluetoothGattService> services) {
-        Log.d(TAG, "takeBertyService() called");
+        Log.d(TAG, "takeBertyService: device: " + getMACAddress());
         for (BluetoothGattService service : services) {
             if (service.getUuid().equals(GattServer.SERVICE_UUID)) {
-                Log.d(TAG, "takeBertyService(): found");
+                Log.d(TAG, "takeBertyService(): found, device: " + getMACAddress());
                 setBertyService(service);
                 return true;
             }
         }
+        Log.i(TAG, "takeBertyService(): not found, device: " + getMACAddress());
         return false;
     }
 
     private boolean checkCharacteristicProperties(BluetoothGattCharacteristic characteristic,
                                                   int properties) {
+        Log.d(TAG, "checkCharacteristicProperties: device: " + getMACAddress());
+
         if (characteristic.getProperties() == properties) {
-            Log.d(TAG, "checkCharacteristicProperties() match");
+            Log.d(TAG, "checkCharacteristicProperties() match, device: " + getMACAddress());
             return true;
         }
-        Log.e(TAG, "checkCharacteristicProperties() doesn't match: " + characteristic.getProperties() + " / " + properties);
+        Log.e(TAG, "checkCharacteristicProperties() doesn't match: " + characteristic.getProperties() + " / " + properties + ", device: " + getMACAddress());
         return false;
     }
 
     private boolean takeBertyCharacteristics() {
+        Log.d(TAG, "takeBertyCharacteristic(): device: " + getMACAddress());
         int nbOfFoundCharacteristics = 0;
         List<BluetoothGattCharacteristic> characteristics = mBertyService.getCharacteristics();
         for (BluetoothGattCharacteristic characteristic : characteristics) {
             if (characteristic.getUuid().equals(GattServer.PEER_ID_UUID)) {
-                Log.d(TAG, "takeBertyCharacteristic(): peerID characteristic found");
+                Log.d(TAG, "takeBertyCharacteristic(): peerID characteristic found, device: " + getMACAddress());
                 if (checkCharacteristicProperties(characteristic,
                         BluetoothGattCharacteristic.PROPERTY_READ)) {
                     setPeerIDCharacteristic(characteristic);
                     nbOfFoundCharacteristics++;
                 }
             } else if (characteristic.getUuid().equals(GattServer.WRITER_UUID)) {
-                Log.d(TAG, "takeBertyCharacteristic(): writer characteristic found");
+                Log.d(TAG, "takeBertyCharacteristic(): writer characteristic found, device: " + getMACAddress());
                 if (checkCharacteristicProperties(characteristic,
                         BluetoothGattCharacteristic.PROPERTY_WRITE)) {
                     setWriterCharacteristic(characteristic);
@@ -260,9 +312,9 @@ public class PeerDevice {
     // Asynchronous operation that will be reported to the BluetoothGattCallback#onCharacteristicRead
     // callback.
     public boolean requestRemotePID() {
-        Log.v(TAG, "requestRemotePID() called");
+        Log.v(TAG, "requestRemotePID(): device: " + getMACAddress());
         if (!mBluetoothGatt.readCharacteristic(getPeerIDCharacteristic())) {
-            Log.e(TAG, "requestRemotePID() error");
+            Log.e(TAG, "requestRemotePID() error, device: " + getMACAddress());
             return false;
         }
         return true;
@@ -300,20 +352,15 @@ public class PeerDevice {
                     Log.d(TAG, "onConnectionStateChange() called by device " + gatt.getDevice().getAddress());
                     if (newState == BluetoothProfile.STATE_CONNECTED) {
                         Log.d(TAG, "onConnectionStateChange(): connected");
-                        int bondState = gatt.getDevice().getBondState();
-
-                        // Take action depending on the bond state
-                        if(bondState == BOND_NONE || bondState == BOND_BONDED) {
-                            setState(CONNECTION_STATE.CONNECTED);
-                            gatt.requestMtu(REQUEST_MTU);
-                        }
+                        setState(CONNECTION_STATE.CONNECTED);
+                        gatt.requestMtu(REQUEST_MTU);
                     } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                         Log.d(TAG, "onConnectionStateChange(): disconnected");
+                        BleInterface.BLEHandleLostPeer(getRemotePID());
                         setState(CONNECTION_STATE.DISCONNECTED);
                         setBluetoothGatt(null);
                     } else {
                         Log.e(TAG, "onConnectionStateChange(): unknown state");
-                        setState(CONNECTION_STATE.DISCONNECTED);
                         close();
                     }
                 }
@@ -321,7 +368,7 @@ public class PeerDevice {
                 @Override
                 public void onServicesDiscovered(BluetoothGatt gatt, int status) {
                     super.onServicesDiscovered(gatt, status);
-                    Log.d(TAG, "onServicesDiscovered(): called");
+                    Log.d(TAG, "onServicesDiscovered: device: " + getMACAddress());
                     if (takeBertyService(gatt.getServices())) {
                         if (takeBertyCharacteristics()) {
                             requestRemotePID();
@@ -334,10 +381,10 @@ public class PeerDevice {
                                                  BluetoothGattCharacteristic characteristic,
                                                  int status) {
                     super.onCharacteristicRead(gatt, characteristic, status);
-                    Log.d(TAG, "onCharacteristicRead() called");
+                    Log.d(TAG, "onCharacteristicRead: device: " + getMACAddress());
                     if (status != BluetoothGatt.GATT_SUCCESS) {
                         Log.e(TAG, "onCharacteristicRead(): read error");
-                        gatt.close();
+                        close();
                     }
                     if (characteristic.getUuid().equals(GattServer.PEER_ID_UUID)) {
                         String peerID;
@@ -346,25 +393,10 @@ public class PeerDevice {
                             Log.e(TAG, "onCharacteristicRead() error: peerID is null");
                             return ;
                         }
-                        if (!isClientReady()) {
-                            // test if a PeerDevice already exist for this remote PID
-                            if (getRemotePID() != null && PeerManager.get(getRemotePID()).getPeerDevice() != null) {
-                                Log.i(TAG, "onCharacteristicRead(): a connection already exists");
-                                DeviceManager.closeDeviceConnection(mBluetoothDevice.getAddress());
-                                return;
-                            }
-                            if (getRemotePID() == null) {
-                                setRemotePID(peerID);
-                            }
-                            // Write the local PID to the remote device
-                            writeLocalPID();
-                        } else {
-                            Log.e(TAG, "onCharacteristicRead(): client already ready");
-                            gatt.close();
-                        }
+                        handleReceivedRemotePID(peerID);
                     } else {
                         Log.e(TAG, "onCharacteristicRead(): wrong read characteristic");
-                        gatt.close();
+                        close();
                     }
                 }
 
@@ -373,28 +405,20 @@ public class PeerDevice {
                                                    BluetoothGattCharacteristic characteristic,
                                                    int status) {
                     super.onCharacteristicWrite(gatt, characteristic, status);
-
-                    if (status != BluetoothGatt.GATT_SUCCESS) {
-                        Log.e(TAG, "onCharacteristicWrite(): write error");
-                        gatt.close();
-                        // TODO: better close connection
-                    }
-
-                    if (!isClientReady()) {
-                        handleWriteLocalPID();
-                    }
                 }
 
                 @Override
                 public void onMtuChanged(BluetoothGatt gatt, int mtu, int status) {
-                    Log.d(TAG, "onMtuChanged() called: " + mtu);
+                    Log.d(TAG, "onMtuChanged(): mtu:" + mtu + ", device: " + getMACAddress());
                     PeerDevice peerDevice;
                     if (status != BluetoothGatt.GATT_SUCCESS) {
                         Log.e(TAG, "onMtuChanged() error: transmission error");
+                        close();
                         return ;
                     }
                     if ((peerDevice = DeviceManager.get(gatt.getDevice().getAddress())) == null) {
                         Log.e(TAG, "onMtuChanged() error: device not found");
+                        gatt.close();
                         return ;
                     }
                     peerDevice.setMtu(mtu);

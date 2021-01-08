@@ -32,6 +32,7 @@ type Conn struct {
 	ready bool
 	sync.Mutex
 	cache *RingBufferMap
+	mp    *mplex
 
 	ctx       context.Context
 	cancel    func()
@@ -54,16 +55,20 @@ func newConn(ctx context.Context, t *proximityTransport, remoteMa ma.Multiaddr,
 		remoteMa:  remoteMa,
 		ready:     false,
 		cache:     NewRingBufferMap(t.logger, 128),
+		mp:        newMplex(connCtx, t.logger),
 		ctx:       connCtx,
 		cancel:    cancel,
 		transport: t,
 	}
 
-	// Flush the transport cache
-	go maconn.flushCache(t.cache)
-
 	// Stores the conn in connMap, will be deleted during conn.Close()
 	t.connMap.Store(maconn.RemoteAddr().String(), maconn)
+
+	// Configure mplex and run it
+	maconn.mp.addInputCache(t.cache)
+	maconn.mp.addInputCache(maconn.cache)
+	maconn.mp.setOutput(pw)
+	go maconn.mp.run(maconn.RemoteAddr().String())
 
 	// Returns an upgraded CapableConn (muxed, addr filtered, secured, etc...)
 	if inbound {
@@ -80,6 +85,9 @@ func (c *Conn) Read(payload []byte) (n int, err error) {
 		c.transport.logger.Error("Conn.Read failed: conn already closed")
 		return 0, fmt.Errorf("error: Conn.Read failed: conn already closed")
 	}
+
+	// Flush the transport cache
+	//c.flushCache(c.transport.cache)
 
 	n, err = c.readOut.Read(payload)
 	if err != nil {
@@ -104,7 +112,7 @@ func (c *Conn) Write(payload []byte) (n int, err error) {
 		c.Lock()
 		if !c.ready {
 			c.ready = true
-			c.flushCache(c.cache)
+			//c.flushCache(c.cache)
 		}
 		c.Unlock()
 	}
@@ -137,6 +145,7 @@ func (c *Conn) Close() error {
 
 // flushCache gets cached payloads and puts in the pipe reader
 func (c *Conn) flushCache(cache *RingBufferMap) {
+	c.transport.logger.Debug("flushCache() calleddd")
 	payloads := cache.Flush(c.RemoteAddr().String())
 	for payload := range payloads {
 		_, err := c.readIn.Write(payload)
@@ -146,6 +155,7 @@ func (c *Conn) flushCache(cache *RingBufferMap) {
 			c.transport.logger.Debug("flushCache: successful write pipe")
 		}
 	}
+	c.transport.logger.Debug("flushCache() enddd")
 }
 
 // isReady tells if  libp2p is ready to accept input connections

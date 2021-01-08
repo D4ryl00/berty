@@ -17,6 +17,7 @@ import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.util.Log;
 
+import java.util.Base64;
 import java.util.Collections;
 import java.util.concurrent.CountDownLatch;
 
@@ -172,21 +173,23 @@ public class BleDriver {
     }
 
     public boolean SendToPeer(String remotePID, byte[] payload) {
-        Log.d(TAG, "SendToPeer() called");
+        Log.d(TAG, "SendToPeer(): remotePID=" + remotePID + " payload=" + Base64.getEncoder().encodeToString(payload));
         PeerDevice peerDevice;
         BluetoothGattCharacteristic writer;
         BluetoothGatt gatt;
 
-        try {
-            peerDevice = PeerManager.get(remotePID).getPeerDevice();
-            writer = peerDevice.getWriterCharacteristic();
-            writer.setValue(payload);
-            gatt = peerDevice.getBluetoothGatt();
-            gatt.writeCharacteristic(writer);
-        } catch (NullPointerException e) {
-            Log.e(TAG, "Failed to get BluetoothGatt for peer: " + remotePID);
+        if ((peerDevice = PeerManager.get(remotePID).getPeerDevice()) == null) {
+            Log.e(TAG, "SendToPeer: remote device not found");
             return false;
         }
+        if (peerDevice.isDisconnected()) {
+            Log.e(TAG, "SendToPeer: remote device is disconnected");
+            return false;
+        }
+        writer = peerDevice.getWriterCharacteristic();
+        writer.setValue(payload);
+        gatt = peerDevice.getBluetoothGatt();
+        gatt.writeCharacteristic(writer);
         return true;
     }
 }

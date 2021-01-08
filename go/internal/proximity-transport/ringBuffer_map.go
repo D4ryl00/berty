@@ -35,7 +35,7 @@ func NewRingBufferMap(logger *zap.Logger, size int) *RingBufferMap {
 
 // Add adds the payload into a circular cache
 func (rbm *RingBufferMap) Add(peerID string, payload []byte) {
-	rbm.logger.Debug("Add", zap.String("peerID", peerID), zap.Any("payload", payload))
+	rbm.logger.Debug("Add", zap.String("peerID", peerID), zap.Binary("payload", payload))
 
 	var rBuffer *ringBuffer
 
@@ -78,7 +78,7 @@ func (rbm *RingBufferMap) Flush(peerID string) <-chan []byte {
 					continue
 				}
 
-				rbm.logger.Debug("flushCache", zap.Any("payload", payload))
+				rbm.logger.Debug("flushCache", zap.Binary("payload", payload))
 				c <- payload
 
 				rBuffer.buffer.Value = nil

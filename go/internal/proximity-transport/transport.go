@@ -150,7 +150,11 @@ func (t *proximityTransport) Listen(localMa ma.Multiaddr) (tpt.Listener, error) 
 
 // ReceiveFromPeer is called by native driver when peer's device sent data.
 func (t *proximityTransport) ReceiveFromPeer(remotePID string, payload []byte) {
-	t.logger.Debug("ReceiveFromPeer()", zap.String("remotePID", remotePID))
+	t.logger.Debug("ReceiveFromPeer()", zap.String("remotePID", remotePID), zap.Binary("payload", payload))
+
+	// copy value from driver
+	value := make([]byte, len(payload))
+	copy(value, payload)
 
 	c, ok := t.connMap.Load(remotePID)
 	if ok {
@@ -159,7 +163,7 @@ func (t *proximityTransport) ReceiveFromPeer(remotePID string, payload []byte) {
 			c.(*Conn).Lock()
 			if !c.(*Conn).ready {
 				t.logger.Info("ReceiveFromPeer: connection is not ready to accept incoming packets, add it to cache")
-				c.(*Conn).cache.Add(remotePID, payload)
+				c.(*Conn).cache.Add(remotePID, value)
 				c.(*Conn).Unlock()
 				return
 			}
@@ -167,15 +171,10 @@ func (t *proximityTransport) ReceiveFromPeer(remotePID string, payload []byte) {
 		}
 
 		// Write the payload into pipe
-		_, err := c.(*Conn).readIn.Write(payload)
-		if err != nil {
-			t.logger.Error("ReceiveFromPeer: write pipe error", zap.Error(err))
-		} else {
-			t.logger.Debug("ReceiveFromPeer: successful write pipe")
-		}
+		c.(*Conn).mp.input <- value
 	} else {
 		t.logger.Info("ReceiveFromPeer: no Conn found, put payload in cache")
-		t.cache.Add(remotePID, payload)
+		t.cache.Add(remotePID, value)
 	}
 }
 

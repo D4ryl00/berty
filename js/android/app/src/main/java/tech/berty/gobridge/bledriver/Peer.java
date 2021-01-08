@@ -31,4 +31,13 @@ public class Peer {
         }
         return false;
     }
+
+    public void CallFoundPeer() {
+        if (isReady()) {
+            Log.d(TAG, "CallFoundPeer: peer ready");
+            BleInterface.BLEHandleFoundPeer(mPeerID);
+        } else {
+            Log.d(TAG, "CallFoundPeer: peer not ready yet");
+        }
+    }
 }
