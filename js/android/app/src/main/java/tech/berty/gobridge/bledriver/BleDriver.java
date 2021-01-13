@@ -15,6 +15,8 @@ import android.bluetooth.le.ScanSettings;
 import android.content.Context;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 
 import java.util.Base64;
@@ -34,12 +36,15 @@ public class BleDriver {
     private static BluetoothManager mBluetoothManager;
     private static BluetoothAdapter mBluetoothAdapter;
     private static GattServer mGattServer;
+    private static Handler mMainHandler = new Handler(Looper.getMainLooper());
 
     private static Advertiser mAdvertiser;
     private static Scanner mScanner;
 
     private static boolean mInit = false;
     private static boolean mStarted = false;
+
+    //public static Handler BleHandler = new Handler();
 
     private BleDriver(Context context) {
         if (mBleDriver != null) {
@@ -49,14 +54,10 @@ public class BleDriver {
     }
 
     // Singleton method
-    public static BleDriver getInstance(Context appContext) {
+    public static synchronized BleDriver getInstance(Context appContext) {
         if (mBleDriver == null) {
-            synchronized (BleDriver.class) {
-                if (mBleDriver == null) {
-                    mBleDriver = new BleDriver(appContext);
-                    initDriver();
-                }
-            }
+            mBleDriver = new BleDriver(appContext);
+            initDriver();
         }
         return mBleDriver;
     }

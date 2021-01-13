@@ -7,6 +7,8 @@ import android.bluetooth.BluetoothGattCharacteristic;
 import android.bluetooth.BluetoothGattService;
 import android.bluetooth.BluetoothProfile;
 import android.content.Context;
+import android.os.Build;
+import android.os.Handler;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
@@ -14,7 +16,9 @@ import androidx.annotation.NonNull;
 import java.util.List;
 
 import static android.bluetooth.BluetoothDevice.BOND_BONDED;
+import static android.bluetooth.BluetoothDevice.BOND_BONDING;
 import static android.bluetooth.BluetoothDevice.BOND_NONE;
+import static android.bluetooth.BluetoothGatt.GATT_SUCCESS;
 
 public class PeerDevice {
     private static final String TAG = "bty.ble.PeerDevice";
@@ -349,18 +353,48 @@ public class PeerDevice {
                 @Override
                 public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
                     super.onConnectionStateChange(gatt, status, newState);
-                    Log.d(TAG, "onConnectionStateChange() called by device " + gatt.getDevice().getAddress());
-                    if (newState == BluetoothProfile.STATE_CONNECTED) {
-                        Log.d(TAG, "onConnectionStateChange(): connected");
-                        setState(CONNECTION_STATE.CONNECTED);
-                        gatt.requestMtu(REQUEST_MTU);
-                    } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
-                        Log.d(TAG, "onConnectionStateChange(): disconnected");
-                        BleInterface.BLEHandleLostPeer(getRemotePID());
-                        setState(CONNECTION_STATE.DISCONNECTED);
-                        setBluetoothGatt(null);
+
+                    BluetoothDevice device = gatt.getDevice();
+
+                    Log.d(TAG, "onConnectionStateChange() called by device " + device.getAddress());
+
+                    if(status == GATT_SUCCESS) {
+                        if (newState == BluetoothProfile.STATE_CONNECTED) {
+                            Log.d(TAG, "onConnectionStateChange(): connected");
+                            setState(CONNECTION_STATE.CONNECTED);
+
+                            int bondState = device.getBondState();        // Take action depending on the bond state
+                            if(bondState == BOND_NONE || bondState == BOND_BONDED) {
+                                // Connected to device, now proceed to discover it's services but delay a bit if needed
+                                int delayWhenBonded = 0;
+                                if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.N) {
+                                    delayWhenBonded = 1000;
+                                }
+                                final int delay = bondState == BOND_BONDED ? delayWhenBonded : 0;
+                                final Runnable discoverServicesRunnable = () -> {
+                                    Log.d(TAG, "Continuing connection of " + device.getAddress() + " with delay of " + delay + " ms");
+                                    boolean result = gatt.requestMtu(REQUEST_MTU);
+                                    if (!result) {
+                                        Log.e(TAG, "onConnectionStateChange: failed to requesting MTU");
+                                    }
+                                };
+                                BleDriver.mMainHandler.postDelayed(discoverServicesRunnable, delay);
+                                //gatt.requestMtu(REQUEST_MTU);
+                            } else if (bondState == BOND_BONDING) {
+                                // Bonding process in progress, let it complete
+                                Log.i(TAG, "waiting for bonding to complete");
+                            }
+                        } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
+                            Log.d(TAG, "onConnectionStateChange(): disconnected");
+                            BleInterface.BLEHandleLostPeer(getRemotePID());
+                            setState(CONNECTION_STATE.DISCONNECTED);
+                            setBluetoothGatt(null);
+                        } else {
+                            Log.e(TAG, "onConnectionStateChange(): unknown state");
+                            close();
+                        }
                     } else {
-                        Log.e(TAG, "onConnectionStateChange(): unknown state");
+                        Log.e(TAG, "onConnectionStateChange(): status error=" + status);
                         close();
                     }
                 }
@@ -382,7 +416,7 @@ public class PeerDevice {
                                                  int status) {
                     super.onCharacteristicRead(gatt, characteristic, status);
                     Log.d(TAG, "onCharacteristicRead: device: " + getMACAddress());
-                    if (status != BluetoothGatt.GATT_SUCCESS) {
+                    if (status != GATT_SUCCESS) {
                         Log.e(TAG, "onCharacteristicRead(): read error");
                         close();
                     }
@@ -411,7 +445,7 @@ public class PeerDevice {
                 public void onMtuChanged(BluetoothGatt gatt, int mtu, int status) {
                     Log.d(TAG, "onMtuChanged(): mtu:" + mtu + ", device: " + getMACAddress());
                     PeerDevice peerDevice;
-                    if (status != BluetoothGatt.GATT_SUCCESS) {
+                    if (status != GATT_SUCCESS) {
                         Log.e(TAG, "onMtuChanged() error: transmission error");
                         close();
                         return ;

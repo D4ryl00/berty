@@ -65,7 +65,7 @@ public class GattServerCallback extends BluetoothGattServerCallback {
     public void onConnectionStateChange(BluetoothDevice device, int status, int newState) {
         super.onConnectionStateChange(device, status, newState);
 
-        /*Log.d(TAG, "onConnectionStateChange() called with device: " + device + " with newState: " + newState);
+        Log.d(TAG, "onConnectionStateChange() called with device: " + device + " with newState: " + newState);
         PeerDevice peerDevice = DeviceManager.get(device.getAddress());
 
         if (newState == BluetoothProfile.STATE_CONNECTED) {
@@ -87,7 +87,7 @@ public class GattServerCallback extends BluetoothGattServerCallback {
                 peerDevice.setState(PeerDevice.CONNECTION_STATE.DISCONNECTED);
                 BleInterface.BLEHandleLostPeer(peerDevice.getRemotePID());
             }
-        }*/
+        }
     }
 
     @Override
