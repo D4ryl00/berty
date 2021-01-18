@@ -77,9 +77,9 @@ public class GattServerCallback extends BluetoothGattServerCallback {
                 DeviceManager.addDevice(peerDevice);
             }
             if (peerDevice.isDisconnected()) {
-                peerDevice.setState(PeerDevice.CONNECTION_STATE.CONNECTING);
+                peerDevice.setState(PeerDevice.CONNECTION_STATE.CONNECTED);
                 // Everything is handled in this method: GATT connection/reconnection and handshake if necessary
-                peerDevice.connectToDevice();
+                //peerDevice.connectToDevice();
             }
         } else {
             Log.d(TAG, "disconnected");
@@ -90,24 +90,28 @@ public class GattServerCallback extends BluetoothGattServerCallback {
         }
     }
 
+    // onCharacteristicReadRequest is called when client wants the server device peer id
     @Override
     public void onCharacteristicReadRequest(BluetoothDevice device,
                                             int requestId,
                                             int offset,
                                             BluetoothGattCharacteristic characteristic) {
         super.onCharacteristicReadRequest(device, requestId, offset, characteristic);
+        Log.v(TAG, String.format("onCharacteristicReadRequest() called for device %s", device.getAddress()));
 
-        Log.d(TAG, "onCharacteristicReadRequest() called");
         boolean full = false;
         PeerDevice peerDevice;
         byte[] value;
 
         if ((peerDevice = DeviceManager.get(device.getAddress())) == null) {
-            Log.e(TAG, "onCharacteristicReadRequest(): device not found, creating one");
-            peerDevice = new PeerDevice(mContext, device, mLocalPID);
-            DeviceManager.addDevice(peerDevice);
+            Log.e(TAG, String.format("onCharacteristicReadRequest(): device %s not found", device.getAddress()));
+            /*peerDevice = new PeerDevice(mContext, device, mLocalPID);
+            DeviceManager.addDevice(peerDevice);*/
+            mGattServer.getGattServer().sendResponse(device, requestId, BluetoothGatt.GATT_FAILURE,
+                offset, null);
+            return ;
         }
-        if (characteristic.getUuid().equals(GattServer.PEER_ID_UUID)) {
+        if (characteristic.getUuid().equals(GattServer.READER_UUID)) {
             String peerID = characteristic.getStringValue(0);
             if ((peerID.length() - offset) <= peerDevice.getMtu() - ATT_HEADER_READ_SIZE) {
                 Log.d(TAG, "onCharacteristicReadRequest: mtu is big enough (" + (peerID.length() - offset) + " bytes to read)");
@@ -119,7 +123,7 @@ public class GattServerCallback extends BluetoothGattServerCallback {
             mGattServer.getGattServer().sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, offset, value);
             if (full) {
                 Log.d(TAG, "onCharacteristicReadRequest: finished");
-                peerDevice.handleServerPIDSent();
+                peerDevice.handleServerDataSent();
             }
         } else {
             Log.e(TAG, "onCharacteristicReadRequest: try to read to a wrong characteristic");

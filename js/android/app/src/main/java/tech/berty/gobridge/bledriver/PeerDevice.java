@@ -14,6 +14,11 @@ import android.util.Log;
 import androidx.annotation.NonNull;
 
 import java.util.List;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 import static android.bluetooth.BluetoothDevice.BOND_BONDED;
 import static android.bluetooth.BluetoothDevice.BOND_BONDING;
@@ -23,9 +28,14 @@ import static android.bluetooth.BluetoothGatt.GATT_SUCCESS;
 public class PeerDevice {
     private static final String TAG = "bty.ble.PeerDevice";
 
-    // Max MTU requested
-    // See https://chromium.googlesource.com/aosp/platform/system/bt/+/29e794418452c8b35c2d42fe0cda81acd86bbf43/stack/include/gatt_api.h#123
-    private static final int REQUEST_MTU = 517;
+    // Minimal and default MTU
+    private static final int DEFAULT_MTU = 23;
+
+    // Max MTU that Android can handle
+    public static final int MAX_MTU = 517;
+
+    // Maximum number of retries of commands
+    private static final int MAX_TRIES = 3;
 
     public enum CONNECTION_STATE {
         DISCONNECTED,
@@ -39,6 +49,7 @@ public class PeerDevice {
     private BluetoothDevice mBluetoothDevice;
     private BluetoothGatt mBluetoothGatt;
 
+    private final Queue<Runnable> mCommandQueue = new ConcurrentLinkedQueue<>();
     private final Object mLockState = new Object();
     private final Object mLockRemotePID = new Object();
     private final Object mLockMtu = new Object();
@@ -47,7 +58,7 @@ public class PeerDevice {
     private final Object mLockPeer = new Object();
 
     private BluetoothGattService mBertyService;
-    private BluetoothGattCharacteristic mPeerIDCharacteristic;
+    private BluetoothGattCharacteristic mReaderCharacteristic;
     private BluetoothGattCharacteristic mWriterCharacteristic;
 
     private Peer mPeer;
@@ -55,6 +66,11 @@ public class PeerDevice {
     private String mLocalPID;
     private boolean mClientReady = false;
     private boolean mServerReady = false;
+    private boolean mDiscoveryStarted = false;
+
+    private boolean mCommandQueueBusy = false;
+    private boolean mIsRetrying = false;
+    private int mNrTries = 0;
 
     //private int mMtu = 0;
     // default MTU is 23
@@ -84,8 +100,14 @@ public class PeerDevice {
         Log.d(TAG, "connectToDevice: " + getMACAddress());
 
         if (!isConnected()) {
-            setBluetoothGatt(mBluetoothDevice.connectGatt(mContext, false,
-                mGattCallback, BluetoothDevice.TRANSPORT_LE));
+            BleDriver.mainHandler.postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    setState(CONNECTION_STATE.CONNECTING);
+                    setBluetoothGatt(mBluetoothDevice.connectGatt(mContext, false,
+                        mGattCallback, BluetoothDevice.TRANSPORT_LE));
+                }
+            }, 100);
         }
     }
 
@@ -95,6 +117,21 @@ public class PeerDevice {
 
     public boolean isDisconnected() {
         return getState() == CONNECTION_STATE.DISCONNECTED;
+    }
+
+    private void disconnect() {
+        if (getState() == CONNECTION_STATE.CONNECTED || getState() == CONNECTION_STATE.CONNECTING) {
+            setState(CONNECTION_STATE.DISCONNECTING);
+            BleDriver.mainHandler.post(new Runnable() {
+                @Override
+                public void run() {
+                    if (getState() == CONNECTION_STATE.DISCONNECTING && getBluetoothGatt() != null) {
+                        getBluetoothGatt().disconnect();
+                        Log.i(TAG, String.format("force disconnect %s", mBluetoothDevice.getAddress()));
+                    }
+                }
+            });
+        }
     }
 
     // setters and getters are accessed by the DeviceManager thread et this thread so we need to
@@ -123,12 +160,12 @@ public class PeerDevice {
         }
     }
 
-    public void setPeerIDCharacteristic(BluetoothGattCharacteristic peerID) {
-        mPeerIDCharacteristic = peerID;
+    public void setReaderCharacteristic(BluetoothGattCharacteristic peerID) {
+        mReaderCharacteristic = peerID;
     }
 
-    public BluetoothGattCharacteristic getPeerIDCharacteristic() {
-        return mPeerIDCharacteristic;
+    public BluetoothGattCharacteristic getReaderCharacteristic() {
+        return mReaderCharacteristic;
     }
 
     public void setWriterCharacteristic(BluetoothGattCharacteristic write) {
@@ -139,7 +176,7 @@ public class PeerDevice {
         return mWriterCharacteristic;
     }
 
-    public boolean updateWriterValue(String value) {
+    public boolean setWriterValue(String value) {
         return getWriterCharacteristic().setValue(value);
     }
 
@@ -176,48 +213,75 @@ public class PeerDevice {
         }
     }
 
-    public void handleServerPIDSent() {
-        Log.d(TAG, "handleServerPIDSent: device: " + getMACAddress());
-        Peer peer;
+    public void handleServerDataSent() {
+        Log.v(TAG, String.format("handleServerDataSent for device %s", getMACAddress()));
 
-        if (!isServerReady()) {
-            setServerReady(true);
-            if ((peer = getPeer()) != null) {
-                peer.CallFoundPeer();
+        if (!isClientReady()) {
+            if (getRemotePID() == null) {
+                Log.e(TAG, String.format("handleServerDataSent: remotePID is null for device %s", getMACAddress()));
+                return ;
             }
+
+            setServerReady(true);
+            setClientReady(true);
         } else {
-            Log.e(TAG, "handleServerPIDSent: PID already sent, device: " + getMACAddress());
+            Log.e(TAG, String.format("handleServerDataSent: PID already sent for device %s", getMACAddress()));
             close();
         }
     }
 
-    public void handleReceivedRemotePID(String peerID) {
-        Log.d(TAG, "handleReceivedRemotePID: device: " + getMACAddress());
-        Peer peer;
+    public boolean handleServerDataReceived(byte[] payload) {
+        Log.v(TAG, String.format("handleServerDataReceived for device %s", getMACAddress()));
 
-
-        // test if a PeerDevice already exist for this remote PID
-        if (PeerManager.get(peerID) != null) {
-            Log.i(TAG, "handleReceivedRemotePID(): a connection already exists, close connection, device: " + getMACAddress());
-            close();
-            return ;
-        }
-
-        setRemotePID(peerID);
-        setClientReady(true);
-        peer = PeerManager.register(peerID, this);
-        setPeer(peer);
-        peer.CallFoundPeer();
-    }
-
-    public boolean handleServerDataReceived(byte[] data) {
         boolean status = false;
 
-        if (updateWriterValue(new String(data))) {
-            status = true;
+        if (!isServerReady()) {
+            Peer peer;
+            String remotePID = new String(payload);
+
+            // check if a connection already exists
+            if ((peer = PeerManager.get(remotePID)) != null) {
+                Log.i(TAG, String.format("handleServerDataReceived: canceling connection for device %s because a connection with the peer %s already exists for device %s", getMACAddress(), remotePID, peer.getPeerDevice().getMACAddress()));
+                disconnect();
+                close();
+                return false;
+            }
+
+            setRemotePID(remotePID);
+            peer = PeerManager.register(remotePID, this);
+            setPeer(peer);
+        } else {
+            BleInterface.BLEReceiveFromPeer(getRemotePID(), payload);
         }
-        BleInterface.BLEReceiveFromPeer(getRemotePID(), data);
         return status;
+    }
+
+    public void handleClientDataReceived(byte[] payload) {
+        Log.v(TAG, String.format("handleClientDataReceived for device %s", getMACAddress()));
+
+        if (!isClientReady()) {
+            Peer peer;
+            String remotePID = new String(payload);
+
+            // check if a connection already exists
+            if ((peer = PeerManager.get(remotePID)) != null) {
+                Log.i(TAG, String.format("handleClientDataReceived: canceling connection for device %s because a connection with the peer %s already exists for device %s", getMACAddress(), remotePID, peer.getPeerDevice().getMACAddress()));
+                disconnect();
+                close();
+                return ;
+            }
+
+            setRemotePID(remotePID);
+            peer = PeerManager.register(remotePID, this);
+            setPeer(peer);
+            setClientReady(true);
+            setServerReady(true);
+            //peer.CallFoundPeer();
+        }
+        // handle here for received data
+    }
+
+    public void handleClientDataSent() {
     }
 
     public void handleWriteLocalPID() {
@@ -227,8 +291,16 @@ public class PeerDevice {
     }
 
     public void setClientReady(boolean state) {
+        Log.v(TAG, String.format("setClientReady called for device %s", getMACAddress()));
+
         synchronized (mLockClient) {
             mClientReady = state;
+            Peer peer;
+
+            if ((peer = PeerManager.get(getRemotePID())) != null) {
+                Log.i(TAG, String.format("setClientReady: calling CllFoundPeer for device %s", getMACAddress()));
+                peer.CallFoundPeer();
+            }
         }
     }
 
@@ -239,8 +311,16 @@ public class PeerDevice {
     }
 
     public void setServerReady(boolean state) {
+        Log.v(TAG, String.format("setServerReady called for device %s", getMACAddress()));
+
         synchronized (mLockServer) {
             mServerReady = state;
+            Peer peer;
+
+            if ((peer = PeerManager.get(getRemotePID())) != null) {
+                Log.i(TAG, String.format("setServerReady: calling CallFoundPeer for device %s", getMACAddress()));
+                peer.CallFoundPeer();
+            }
         }
     }
 
@@ -251,26 +331,35 @@ public class PeerDevice {
     }
 
     public void close() {
-        if (isConnected()) {
+
+        if (getBluetoothGatt() != null) {
             getBluetoothGatt().close();
-            setState(CONNECTION_STATE.DISCONNECTING);
-            setClientReady(false);
-            setServerReady(false);
-            setPeer(null);
-            PeerManager.unregister(mRemotePID);
+            setBluetoothGatt(null);
         }
+        mCommandQueue.clear();
+        mCommandQueueBusy = false;
+        setState(CONNECTION_STATE.DISCONNECTED);
+        setClientReady(false);
+        setServerReady(false);
+        setPeer(null);
+        PeerManager.unregister(mRemotePID);
     }
 
     private boolean takeBertyService(List<BluetoothGattService> services) {
-        Log.d(TAG, "takeBertyService: device: " + getMACAddress());
+        Log.v(TAG, String.format("takeBertyService: called for device %s", getMACAddress()));
+        if (getBertyService() != null) {
+            Log.d(TAG, String.format("Berty service already found for device %s", getMACAddress()));
+            return true;
+        }
+
         for (BluetoothGattService service : services) {
             if (service.getUuid().equals(GattServer.SERVICE_UUID)) {
-                Log.d(TAG, "takeBertyService(): found, device: " + getMACAddress());
+                Log.d(TAG, String.format("Berty service found for device %s", getMACAddress()));
                 setBertyService(service);
                 return true;
             }
         }
-        Log.i(TAG, "takeBertyService(): not found, device: " + getMACAddress());
+        Log.i(TAG, String.format("Berty service not found for device", getMACAddress()));
         return false;
     }
 
@@ -287,41 +376,108 @@ public class PeerDevice {
     }
 
     private boolean takeBertyCharacteristics() {
-        Log.d(TAG, "takeBertyCharacteristic(): device: " + getMACAddress());
-        int nbOfFoundCharacteristics = 0;
+        Log.v(TAG, String.format("takeBertyCharacteristic called for device %s", getMACAddress()));
+
+        if (getReaderCharacteristic() != null && getWriterCharacteristic() != null) {
+            Log.d(TAG, "Berty characteristics already found");
+            return true;
+        }
+
         List<BluetoothGattCharacteristic> characteristics = mBertyService.getCharacteristics();
         for (BluetoothGattCharacteristic characteristic : characteristics) {
-            if (characteristic.getUuid().equals(GattServer.PEER_ID_UUID)) {
-                Log.d(TAG, "takeBertyCharacteristic(): peerID characteristic found, device: " + getMACAddress());
+            if (characteristic.getUuid().equals(GattServer.READER_UUID)) {
+                Log.d(TAG, String.format("reader characteristic found for device %s", getMACAddress()));
                 if (checkCharacteristicProperties(characteristic,
                         BluetoothGattCharacteristic.PROPERTY_READ)) {
-                    setPeerIDCharacteristic(characteristic);
-                    nbOfFoundCharacteristics++;
+                    setReaderCharacteristic(characteristic);
+
+                    if (!getBluetoothGatt().setCharacteristicNotification(characteristic, true)) {
+                        Log.e(TAG, String.format("setCharacteristicNotification failed for device %s", getMACAddress()));
+                        setReaderCharacteristic(null);
+                        return false;
+                    }
                 }
             } else if (characteristic.getUuid().equals(GattServer.WRITER_UUID)) {
-                Log.d(TAG, "takeBertyCharacteristic(): writer characteristic found, device: " + getMACAddress());
+                Log.d(TAG, String.format("writer characteristic found for device: ", getMACAddress()));
                 if (checkCharacteristicProperties(characteristic,
                         BluetoothGattCharacteristic.PROPERTY_WRITE)) {
                     setWriterCharacteristic(characteristic);
-                    nbOfFoundCharacteristics++;
                 }
             }
-            if (nbOfFoundCharacteristics == 2) {
-                return true;
-            }
         }
+
+        if (getReaderCharacteristic() != null && getWriterCharacteristic() != null) {
+            return true;
+        }
+
+        Log.e(TAG, String.format("reader/writer characteristics not found for device %s", getMACAddress()));
         return false;
     }
 
-    // Asynchronous operation that will be reported to the BluetoothGattCallback#onCharacteristicRead
-    // callback.
-    public boolean requestRemotePID() {
-        Log.v(TAG, "requestRemotePID(): device: " + getMACAddress());
-        if (!mBluetoothGatt.readCharacteristic(getPeerIDCharacteristic())) {
-            Log.e(TAG, "requestRemotePID() error, device: " + getMACAddress());
+    public boolean read() {
+        Log.v(TAG, String.format("read() called for device %s", getMACAddress()));
+
+        if (!isConnected()) {
+            Log.e(TAG, "read failed: device not connected");
             return false;
         }
-        return true;
+
+        boolean result = mCommandQueue.add(new Runnable() {
+            @Override
+            public void run() {
+                if (isConnected()) {
+                    if (!getBluetoothGatt().readCharacteristic(getReaderCharacteristic())) {
+                        Log.e(TAG, String.format("readCharacteristic failed for characteristic: %s", getReaderCharacteristic().getUuid()));
+                        completedCommand();
+                    } else {
+                        Log.d(TAG, String.format("reading characteristic <%s>", getReaderCharacteristic().getUuid()));
+                        mNrTries++;
+                    }
+                } else {
+                    completedCommand();
+                }
+            }
+        });
+
+        if (result) {
+            nextCommand();
+        } else {
+            Log.e(TAG, "could not enqueue read characteristic command");
+        }
+        return result;
+    }
+
+    public boolean write(byte[] payload) {
+        Log.v(TAG, String.format("write() called for device %s", getMACAddress()));
+
+        if (!isConnected()) {
+            Log.e(TAG, "write failed: device not connected");
+            return false;
+        }
+
+        boolean result = mCommandQueue.add(new Runnable() {
+            @Override
+            public void run() {
+                if (isConnected()) {
+                    if (!getWriterCharacteristic().setValue(payload) || !getBluetoothGatt().writeCharacteristic(getWriterCharacteristic())) {
+                        Log.e(TAG, String.format("writerCharacteristic failed for characteristic: %s", getWriterCharacteristic().getUuid()));
+                        completedCommand();
+                    } else {
+                        Log.d(TAG, String.format("writing characteristic %s", getWriterCharacteristic().getUuid()));
+                        mNrTries++;
+                    }
+                } else {
+                    completedCommand();
+                }
+            }
+        });
+
+        if (result) {
+            nextCommand();
+        } else {
+            Log.e(TAG, "could not enqueue read characteristic command");
+        }
+        return result;
     }
 
     public boolean writeLocalPID() {
@@ -336,15 +492,149 @@ public class PeerDevice {
         return true;
     }
 
-    public void setMtu(int mtu) {
-        synchronized (mLockMtu) {
-            mMtu = mtu;
+    private boolean requestMtu(final int mtu) {
+        Log.v(TAG, "requestMtu called");
+
+        if (mtu < DEFAULT_MTU || mtu > MAX_MTU) {
+            Log.e(TAG, "mtu must be between 23 and 517");
+            return false;
         }
+
+        if (!isConnected()) {
+            Log.e(TAG, "request mtu failed: device not connected");
+            return false;
+        }
+
+        boolean result = mCommandQueue.add(new Runnable() {
+            @Override
+            public void run() {
+                if (isConnected()) {
+                    if (!mBluetoothGatt.requestMtu(mtu)) {
+                        Log.e(TAG, "requestMtu failed");
+                        completedCommand();
+                    }
+                } else {
+                    Log.e(TAG, "request MTU failed: device not connected");
+                    completedCommand();
+                }
+            }
+        });
+
+        if (result) {
+            nextCommand();
+        } else {
+            Log.e(TAG, "could not enqueue requestMtu command");
+        }
+
+        return result;
+    }
+
+    public void setMtu(int mtu) {
+        mMtu = mtu;
     }
 
     public int getMtu() {
-        synchronized (mLockMtu) {
-            return mMtu;
+        return mMtu;
+    }
+
+    private void handshake() {
+        Log.d(TAG, "handshake: called");
+        if (takeBertyService(getBluetoothGatt().getServices())) {
+            if (takeBertyCharacteristics()) {
+                requestMtu(MAX_MTU);
+
+                // send local PID
+                if (!write(mLocalPID.getBytes())) {
+                    Log.e(TAG, String.format("handshake: fail to send local PID for device %s", getMACAddress()));
+                    disconnect();
+                    close();
+                }
+
+                // get remote PID
+                if (!read()) {
+                    Log.e(TAG, String.format("handshake: fail to read remote PID for device %s", getMACAddress()));
+                    disconnect();
+                    close();
+                }
+            }
+        }
+    }
+
+    /**
+     * The current command has been completed, move to the next command in the queue (if any)
+     */
+    private void completedCommand() {
+        Log.v(TAG, String.format("completedCommand called by device %s", getMACAddress()));
+
+        mIsRetrying = false;
+        mCommandQueue.poll();
+        mCommandQueueBusy = false;
+        nextCommand();
+    }
+
+    /**
+     * Retry the current command. Typically used when a read/write fails and triggers a bonding procedure
+     */
+    private void retryCommand() {
+        Log.v(TAG, String.format("retryCommand called by device %s", getMACAddress()));
+
+        mCommandQueueBusy = false;
+        Runnable currentCommand = mCommandQueue.peek();
+        if (currentCommand != null) {
+            if (mNrTries >= MAX_TRIES) {
+                // Max retries reached, give up on this one and proceed
+                Log.d(TAG, "max number of tries reached, not retrying operation anymore");
+                mCommandQueue.poll();
+            } else {
+                mIsRetrying = true;
+            }
+        }
+        nextCommand();
+    }
+
+    /**
+     * Execute the next command in the subscribe queue.
+     * A queue is used because the calls have to be executed sequentially.
+     * If the read or write fails, the next command in the queue is executed.
+     */
+    private void nextCommand() {
+        Log.v(TAG, String.format("nextCommand called by device %s", getMACAddress()));
+
+        synchronized (this) {
+            // If there is still a command being executed, then bail out
+            if (mCommandQueueBusy) {
+                Log.d(TAG, "nextCommand: another command is running, cancel");
+                return;
+            }
+
+            // Check if there is something to do at all
+            final Runnable bluetoothCommand = mCommandQueue.peek();
+            if (bluetoothCommand == null) return;
+
+            // Check if we still have a valid gatt object
+            if (mBluetoothGatt == null) {
+                Log.e(TAG,String.format("nextCommand: gatt is 'null' for peripheral '%s', clearing command queue", getMACAddress()));
+                mCommandQueue.clear();
+                mCommandQueueBusy = false;
+                return;
+            }
+
+            // Execute the next command in the queue
+            mCommandQueueBusy = true;
+            if (!mIsRetrying) {
+                mNrTries = 0;
+            }
+            BleDriver.mainHandler.post(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        bluetoothCommand.run();
+                    } catch (Exception e) {
+                        Log.e(TAG, String.format("nextCommand: command exception for device '%s'", getMACAddress()), e);
+                        completedCommand();
+                    }
+                }
+            });
         }
     }
 
@@ -371,15 +661,15 @@ public class PeerDevice {
                                     delayWhenBonded = 1000;
                                 }
                                 final int delay = bondState == BOND_BONDED ? delayWhenBonded : 0;
-                                final Runnable discoverServicesRunnable = () -> {
+                                final Runnable discoverRunnable = () -> {
                                     Log.d(TAG, "Continuing connection of " + device.getAddress() + " with delay of " + delay + " ms");
-                                    boolean result = gatt.requestMtu(REQUEST_MTU);
-                                    if (!result) {
-                                        Log.e(TAG, "onConnectionStateChange: failed to requesting MTU");
+                                    if (gatt.discoverServices()) {
+                                        mDiscoveryStarted = true;
+                                    } else {
+                                        Log.d(TAG, "discoverServices failed to start");
                                     }
                                 };
-                                BleDriver.mMainHandler.postDelayed(discoverServicesRunnable, delay);
-                                //gatt.requestMtu(REQUEST_MTU);
+                                BleDriver.mainHandler.postDelayed(discoverRunnable, delay);
                             } else if (bondState == BOND_BONDING) {
                                 // Bonding process in progress, let it complete
                                 Log.i(TAG, "waiting for bonding to complete");
@@ -402,12 +692,18 @@ public class PeerDevice {
                 @Override
                 public void onServicesDiscovered(BluetoothGatt gatt, int status) {
                     super.onServicesDiscovered(gatt, status);
+
+                    mDiscoveryStarted = false;
+
                     Log.d(TAG, "onServicesDiscovered: device: " + getMACAddress());
-                    if (takeBertyService(gatt.getServices())) {
-                        if (takeBertyCharacteristics()) {
-                            requestRemotePID();
-                        }
+                    if (status != GATT_SUCCESS) {
+                        Log.e(TAG, String.format("service discovery failed due to internal error '%s', disconnecting", status));
+                        disconnect();
+                        return;
                     }
+
+                    Log.i(TAG, String.format("discovered %d services for '%s'", gatt.getServices().size(), mBluetoothDevice.getAddress()));
+                    handshake();
                 }
 
                 @Override
@@ -418,20 +714,26 @@ public class PeerDevice {
                     Log.d(TAG, "onCharacteristicRead: device: " + getMACAddress());
                     if (status != GATT_SUCCESS) {
                         Log.e(TAG, "onCharacteristicRead(): read error");
+                        disconnect();
                         close();
+                        completedCommand();
+                        return ;
                     }
-                    if (characteristic.getUuid().equals(GattServer.PEER_ID_UUID)) {
-                        String peerID;
-                        if ((peerID = characteristic.getStringValue(0)) == null
-                                || peerID.length() == 0) {
-                            Log.e(TAG, "onCharacteristicRead() error: peerID is null");
+                    if (characteristic.getUuid().equals(GattServer.READER_UUID)) {
+                        byte[] value = characteristic.getValue();
+                        if (value.length == 0) {
+                            Log.d(TAG, "onCharacteristicRead(): received data length is null");
+                            completedCommand();
                             return ;
+                        } else {
+                            handleClientDataReceived(value);
                         }
-                        handleReceivedRemotePID(peerID);
                     } else {
                         Log.e(TAG, "onCharacteristicRead(): wrong read characteristic");
+                        disconnect();
                         close();
                     }
+                    completedCommand();
                 }
 
                 @Override
@@ -439,24 +741,25 @@ public class PeerDevice {
                                                    BluetoothGattCharacteristic characteristic,
                                                    int status) {
                     super.onCharacteristicWrite(gatt, characteristic, status);
+                    handleClientDataSent();
+                    completedCommand();
                 }
 
                 @Override
                 public void onMtuChanged(BluetoothGatt gatt, int mtu, int status) {
-                    Log.d(TAG, "onMtuChanged(): mtu:" + mtu + ", device: " + getMACAddress());
+                    Log.d(TAG, "onMtuChanged test");
+                    Log.v(TAG, String.format("onMtuChanged(): mtu %s for device %s", mtu, getMACAddress()));
                     PeerDevice peerDevice;
+
                     if (status != GATT_SUCCESS) {
                         Log.e(TAG, "onMtuChanged() error: transmission error");
+                        completedCommand();
                         close();
                         return ;
                     }
-                    if ((peerDevice = DeviceManager.get(gatt.getDevice().getAddress())) == null) {
-                        Log.e(TAG, "onMtuChanged() error: device not found");
-                        gatt.close();
-                        return ;
-                    }
-                    peerDevice.setMtu(mtu);
-                    gatt.discoverServices();
+
+                    mMtu = mtu;
+                    completedCommand();
                 }
-            };
+    };
 }

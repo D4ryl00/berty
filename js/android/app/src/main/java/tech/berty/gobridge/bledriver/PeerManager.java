@@ -9,11 +9,6 @@ public class PeerManager {
     private static final String TAG = "bty.ble.PeerManager";
 
     private static HashMap<String, Peer> mPeers = new HashMap<>();
-    private static Context mContext;
-
-    public static void setContext(Context context) {
-        mContext = context;
-    }
 
     public static synchronized Peer register(String peerID, PeerDevice peerDevice) {
         Log.d(TAG, "register() called");

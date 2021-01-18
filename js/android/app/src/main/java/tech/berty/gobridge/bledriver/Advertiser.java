@@ -63,8 +63,7 @@ public class Advertiser extends AdvertiseCallback {
     private AdvertiseSettings buildAdvertiseSettings() {
         return new AdvertiseSettings.Builder()
             .setConnectable(true)
-            .setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_LOW_LATENCY)
-            .setTxPowerLevel(AdvertiseSettings.ADVERTISE_TX_POWER_HIGH)
+            .setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_LOW_POWER)
             .setTimeout(0)
             .build();
     }

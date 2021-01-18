@@ -26,13 +26,13 @@ public class GattServer {
 
     // GATT service UUID
     static final UUID SERVICE_UUID = UUID.fromString("A06C6AB8-886F-4D56-82FC-2CF8610D668D");
-    static final UUID PEER_ID_UUID = UUID.fromString("0EF50D30-E208-4315-B323-D05E0A23E6B5");
+    static final UUID READER_UUID = UUID.fromString("0EF50D30-E208-4315-B323-D05E0A23E6B5");
     static final UUID WRITER_UUID = UUID.fromString("000CBD77-8D30-4EFF-9ADD-AC5F10C2CC1B");
     static final ParcelUuid P_SERVICE_UUID = new ParcelUuid(SERVICE_UUID);
 
     // GATT service objects
     private BluetoothGattService mService;
-    private BluetoothGattCharacteristic mPeerIDCharacteristic;
+    private BluetoothGattCharacteristic mReaderCharacteristic;
     private BluetoothGattCharacteristic mWriterCharacteristic;
 
     private Context mContext;
@@ -55,10 +55,10 @@ public class GattServer {
         Log.i(TAG, "initGattService called");
 
         mService = new BluetoothGattService(SERVICE_UUID, SERVICE_TYPE_PRIMARY);
-        mPeerIDCharacteristic = new BluetoothGattCharacteristic(PEER_ID_UUID, PROPERTY_READ, PERMISSION_READ);
+        mReaderCharacteristic = new BluetoothGattCharacteristic(READER_UUID, PROPERTY_READ, PERMISSION_READ);
         mWriterCharacteristic = new BluetoothGattCharacteristic(WRITER_UUID, PROPERTY_WRITE, PERMISSION_WRITE);
 
-        if (!mService.addCharacteristic(mPeerIDCharacteristic) || !mService.addCharacteristic(mWriterCharacteristic)) {
+        if (!mService.addCharacteristic(mReaderCharacteristic) || !mService.addCharacteristic(mWriterCharacteristic)) {
             Log.e(TAG, "setupService failed: can't add characteristics to service");
             return ;
         }
@@ -88,7 +88,7 @@ public class GattServer {
 
         mBluetoothGattServer = mBluetoothManager.openGattServer(mContext, mGattServerCallback);
 
-        mPeerIDCharacteristic.setValue(peerID);
+        mReaderCharacteristic.setValue(peerID);
         mWriterCharacteristic.setValue("");
         if (!mBluetoothGattServer.addService(mService)) {
             Log.e(TAG, "setupGattServer error: cannot add a new service");

@@ -36,15 +36,13 @@ public class BleDriver {
     private static BluetoothManager mBluetoothManager;
     private static BluetoothAdapter mBluetoothAdapter;
     private static GattServer mGattServer;
-    private static Handler mMainHandler = new Handler(Looper.getMainLooper());
+    public static Handler mainHandler = new Handler(Looper.getMainLooper());
 
     private static Advertiser mAdvertiser;
     private static Scanner mScanner;
 
     private static boolean mInit = false;
     private static boolean mStarted = false;
-
-    //public static Handler BleHandler = new Handler();
 
     private BleDriver(Context context) {
         if (mBleDriver != null) {
@@ -101,7 +99,6 @@ public class BleDriver {
         }
 
         // Setup context dependant objects
-        PeerManager.setContext(mAppContext); // TODO: remove PeerManager
         mGattServer = new GattServer(mAppContext, mBluetoothManager);
         setInit(true);
     }
