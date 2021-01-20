@@ -180,14 +180,16 @@ public class BleDriver {
             Log.e(TAG, "SendToPeer: remote device not found");
             return false;
         }
+
         if (peerDevice.isDisconnected()) {
             Log.e(TAG, "SendToPeer: remote device is disconnected");
             return false;
         }
-        writer = peerDevice.getWriterCharacteristic();
-        writer.setValue(payload);
-        gatt = peerDevice.getBluetoothGatt();
-        gatt.writeCharacteristic(writer);
-        return true;
+
+        if (peerDevice.isClient()) {
+            return peerDevice.write(payload);
+        } else {
+            return mGattServer.writeAndNotify(peerDevice, payload);
+        }
     }
 }

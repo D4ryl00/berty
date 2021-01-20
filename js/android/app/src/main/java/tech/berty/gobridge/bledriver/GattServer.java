@@ -9,6 +9,7 @@ import android.content.Context;
 import android.os.ParcelUuid;
 import android.util.Log;
 
+import java.util.Base64;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.locks.Lock;
@@ -151,5 +152,44 @@ public class GattServer {
                 mLock.unlock();
             }
         }
+    }
+
+    public boolean writeAndNotify(PeerDevice device, byte[] payload) {
+        Log.v(TAG, String.format("writeAndNotify called for device %s", device.getMACAddress()));
+
+        if (mBluetoothGattServer == null) {
+            Log.e(TAG, "writeAndNotify: GATT server is not running");
+            return false;
+        }
+
+        if (mReaderCharacteristic == null) {
+            Log.e(TAG, "writeAndNotify: reader characteristic is null");
+            return false;
+        }
+
+        Log.d(TAG, String.format("writeAndNotify: value is %s", Base64.getEncoder().encodeToString(payload)));
+        mReaderCharacteristic.setValue(payload);
+
+        boolean result = BleQueue.add(new Runnable() {
+            @Override
+            public void run() {
+                if (mBluetoothGattServer == null) {
+                    Log.e(TAG, "writeAndNotify: GATT server is not running");
+                    BleQueue.completedCommand();
+                } else if (mReaderCharacteristic == null) {
+                    Log.e(TAG, "writeAndNotify: reader characteristic is null");
+                    BleQueue.completedCommand();
+                } else if (!mBluetoothGattServer.notifyCharacteristicChanged(device.getBluetoothDevice(), mReaderCharacteristic, true)) {
+                    Log.e(TAG, String.format("notifyCharacteristicChanged failed for device %s", device.getMACAddress()));
+                }
+            }
+        });
+
+        if (result) {
+            BleQueue.nextCommand();
+        } else {
+            Log.e(TAG, "could not enqueue notifyCharacteristicChanged command");
+        }
+        return result;
     }
 }

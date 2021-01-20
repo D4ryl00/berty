@@ -13,6 +13,8 @@ import java.util.Arrays;
 import java.util.Base64;
 import java.util.concurrent.CountDownLatch;
 
+import static android.bluetooth.BluetoothGatt.GATT_SUCCESS;
+
 public class GattServerCallback extends BluetoothGattServerCallback {
     private static final String TAG = "bty.ble.GattSrvCallback";
 
@@ -147,8 +149,7 @@ public class GattServerCallback extends BluetoothGattServerCallback {
                                              byte[] value) {
         super.onCharacteristicWriteRequest(device, requestId, characteristic, prepareWrite,
                 responseNeeded, offset, value);
-
-        Log.d(TAG, "onCharacteristicWriteRequest: called");
+        Log.v(TAG, String.format("onCharacteristicWriteRequest called", device.getAddress()));
         PeerDevice peerDevice;
         boolean status = false;
 
@@ -182,8 +183,7 @@ public class GattServerCallback extends BluetoothGattServerCallback {
     @Override
     public void onExecuteWrite(BluetoothDevice device, int requestId, boolean execute) {
         super.onExecuteWrite(device, requestId, execute);
-
-        Log.d(TAG, "onExecuteWrite called(): " + execute);
+        Log.v(TAG, String.format("onExecuteWrite called for device %s", device.getAddress()));
         PeerDevice peerDevice;
         boolean status = true;
 
@@ -199,6 +199,7 @@ public class GattServerCallback extends BluetoothGattServerCallback {
         }
         mBuffer = null;
         if (!status) {
+            Log.e(TAG, String.format("onExecuteWrite status error: %d", status));
             mGattServer.getGattServer().sendResponse(device, requestId, BluetoothGatt.GATT_FAILURE,
                 0, null);
         } else {
@@ -210,13 +211,24 @@ public class GattServerCallback extends BluetoothGattServerCallback {
     @Override
     public void onMtuChanged(BluetoothDevice device, int mtu) {
         super.onMtuChanged(device, mtu);
-
-        Log.d(TAG, "onMtuChanged() called: " + mtu);
+        Log.v(TAG, String.format("onMtuChanged called for device %s and mtu=%d", device.getAddress(), mtu));
         PeerDevice peerDevice;
+
         if ((peerDevice = DeviceManager.get(device.getAddress())) == null) {
             Log.e(TAG, "onMtuChanged() error: device not found");
             return ;
         }
         peerDevice.setMtu(mtu);
+    }
+
+    @Override
+    public void onNotificationSent(BluetoothDevice device, int status) {
+        super.onNotificationSent(device, status);
+        Log.v(TAG, String.format("onNotificationSent called for device %s", device.getAddress()));
+
+        if (status != GATT_SUCCESS) {
+            Log.e(TAG, String.format("onNotificationSent: status error: %d for device %s, status", status, device));
+        }
+        BleQueue.completedCommand();
     }
 }
