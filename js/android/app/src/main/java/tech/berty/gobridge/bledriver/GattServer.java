@@ -168,19 +168,22 @@ public class GattServer {
         }
 
         Log.d(TAG, String.format("writeAndNotify: value is %s", Base64.getEncoder().encodeToString(payload)));
-        mReaderCharacteristic.setValue(payload);
 
         boolean result = BleQueue.add(new Runnable() {
             @Override
             public void run() {
+                Log.v(TAG, String.format("BleQueue: writeAndNotify for device %s", device.getMACAddress()));
                 if (mBluetoothGattServer == null) {
                     Log.e(TAG, "writeAndNotify: GATT server is not running");
                     BleQueue.completedCommand();
                 } else if (mReaderCharacteristic == null) {
                     Log.e(TAG, "writeAndNotify: reader characteristic is null");
                     BleQueue.completedCommand();
-                } else if (!mBluetoothGattServer.notifyCharacteristicChanged(device.getBluetoothDevice(), mReaderCharacteristic, true)) {
-                    Log.e(TAG, String.format("notifyCharacteristicChanged failed for device %s", device.getMACAddress()));
+                } else {
+                    mReaderCharacteristic.setValue(payload);
+                    if (!mBluetoothGattServer.notifyCharacteristicChanged(device.getBluetoothDevice(), mReaderCharacteristic, true)) {
+                        Log.e(TAG, String.format("notifyCharacteristicChanged failed for device %s", device.getMACAddress()));
+                    }
                 }
             }
         });

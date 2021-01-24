@@ -168,6 +168,7 @@ public class Scanner extends ScanCallback {
         if (peerDevice.isDisconnected()) {
             // Everything is handled in this method: GATT connection/reconnection and handshake if necessary
             peerDevice.connectToDevice();
+            stop();
         }
     }
 }

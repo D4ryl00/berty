@@ -67,28 +67,37 @@ public class GattServerCallback extends BluetoothGattServerCallback {
     public void onConnectionStateChange(BluetoothDevice device, int status, int newState) {
         super.onConnectionStateChange(device, status, newState);
 
-        Log.d(TAG, "onConnectionStateChange() called with device: " + device + " with newState: " + newState);
+        Log.v(TAG, String.format("onConnectionStateChange called for device %s with newState %d", device, newState));
         PeerDevice peerDevice = DeviceManager.get(device.getAddress());
 
-        if (newState == BluetoothProfile.STATE_CONNECTED) {
-            Log.d(TAG, "connected");
+        if (status == GATT_SUCCESS) {
+            if (newState == BluetoothProfile.STATE_CONNECTED) {
+                Log.d(TAG, "connected");
 
-            if (peerDevice == null) {
-                Log.i(TAG, "onConnectionStateChange(): a new device is connected: " + device.getAddress());
-                peerDevice = new PeerDevice(mContext, device, mLocalPID);
-                DeviceManager.addDevice(peerDevice);
-            }
-            if (peerDevice.isDisconnected()) {
-                peerDevice.setState(PeerDevice.CONNECTION_STATE.CONNECTED);
-                // Everything is handled in this method: GATT connection/reconnection and handshake if necessary
-                //peerDevice.connectToDevice();
+                if (peerDevice == null) {
+                    Log.i(TAG, String.format("onConnectionStateChange(): connected with new device %s", device.getAddress()));
+                    peerDevice = new PeerDevice(mContext, device, mLocalPID);
+                    DeviceManager.addDevice(peerDevice);
+                }
+
+                if (peerDevice.getClientState() != PeerDevice.CONNECTION_STATE.DISCONNECTED) {
+                    Log.d(TAG, String.format("onConnectionStateChange: connection already made as client, cancel this one for device %s", device.getAddress()));
+                    mGattServer.getGattServer().cancelConnection(device);
+                } else if (!peerDevice.checkAndSetServerState(PeerDevice.CONNECTION_STATE.DISCONNECTED, PeerDevice.CONNECTION_STATE.CONNECTED)) {
+                    Log.d(TAG, String.format("onConnectionStateChange: a server connection already exists, cancel this one for device %s", device.getAddress()));
+                    mGattServer.getGattServer().cancelConnection(device);
+                }
+            } else {
+                Log.d(TAG, "disconnected");
+                if (peerDevice != null) {
+                    peerDevice.setServerState(PeerDevice.CONNECTION_STATE.DISCONNECTED);
+                    if (peerDevice.getServerState() == PeerDevice.CONNECTION_STATE.CONNECTED) {
+                        BleInterface.BLEHandleLostPeer(peerDevice.getRemotePID());
+                    }
+                }
             }
         } else {
-            Log.d(TAG, "disconnected");
-            if (peerDevice != null) {
-                peerDevice.setState(PeerDevice.CONNECTION_STATE.DISCONNECTED);
-                BleInterface.BLEHandleLostPeer(peerDevice.getRemotePID());
-            }
+            Log.e(TAG, String.format("onConnectionStateChange error with status %d", status));
         }
     }
 
@@ -109,6 +118,11 @@ public class GattServerCallback extends BluetoothGattServerCallback {
             Log.e(TAG, String.format("onCharacteristicReadRequest(): device %s not found", device.getAddress()));
             /*peerDevice = new PeerDevice(mContext, device, mLocalPID);
             DeviceManager.addDevice(peerDevice);*/
+            mGattServer.getGattServer().sendResponse(device, requestId, BluetoothGatt.GATT_FAILURE,
+                offset, null);
+            return ;
+        } else if (peerDevice.getServerState() != PeerDevice.CONNECTION_STATE.CONNECTED) {
+            Log.e(TAG, String.format("onCharacteristicWriteRequest: device not connected", device.getAddress()));
             mGattServer.getGattServer().sendResponse(device, requestId, BluetoothGatt.GATT_FAILURE,
                 offset, null);
             return ;
@@ -154,7 +168,9 @@ public class GattServerCallback extends BluetoothGattServerCallback {
         boolean status = false;
 
         if ((peerDevice = DeviceManager.get(device.getAddress())) == null) {
-            Log.e(TAG, "onCharacteristicWriteRequest: device not found");
+            Log.e(TAG, String.format("onCharacteristicWriteRequest: device %s not found", device.getAddress()));
+        } else if (peerDevice.getServerState() != PeerDevice.CONNECTION_STATE.CONNECTED) {
+            Log.e(TAG, String.format("onCharacteristicWriteRequest: device not connected", device.getAddress()));
         } else {
             if (characteristic.getUuid().equals(GattServer.WRITER_UUID)) {
                 Log.d(TAG, "onCharacteristicWriteRequest: raw value: " + Base64.getEncoder().encodeToString(value) + ", size: " + value.length + ", offset: " + offset + ", preparedWrite: " + prepareWrite + ", needResponse: " + responseNeeded);
@@ -162,7 +178,7 @@ public class GattServerCallback extends BluetoothGattServerCallback {
                     addToBuffer(value); // TODO: put a buffer for each device
                     status = true;
                 } else {
-                    status = peerDevice.handleServerDataReceived(value);
+                    status = peerDevice.handleServerDataReceived(value); // TODO: copy value
                 }
             } else {
                 Log.e(TAG, "onCharacteristicWriteRequest: try to write to a wrong characteristic");
@@ -203,6 +219,7 @@ public class GattServerCallback extends BluetoothGattServerCallback {
             mGattServer.getGattServer().sendResponse(device, requestId, BluetoothGatt.GATT_FAILURE,
                 0, null);
         } else {
+            Log.d(TAG, String.format("onExecuteWrite successful for device %s", device.getAddress()));
             mGattServer.getGattServer().sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS,
                 0, null);
         }

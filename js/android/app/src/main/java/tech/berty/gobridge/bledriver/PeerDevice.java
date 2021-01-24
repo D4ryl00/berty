@@ -41,13 +41,16 @@ public class PeerDevice {
         CONNECTING,
         DISCONNECTING
     }
-    private CONNECTION_STATE mState = CONNECTION_STATE.DISCONNECTED;
+    private CONNECTION_STATE mClientState = CONNECTION_STATE.DISCONNECTED;
+    private CONNECTION_STATE mServerState = CONNECTION_STATE.DISCONNECTED;
+
 
     private Context mContext;
     private BluetoothDevice mBluetoothDevice;
     private BluetoothGatt mBluetoothGatt;
 
-    private final Object mLockState = new Object();
+    public final Object mLockClientState = new Object();
+    public final Object mLockServerState = new Object();
     private final Object mLockRemotePID = new Object();
     private final Object mLockMtu = new Object();
     private final Object mLockClient = new Object();
@@ -96,71 +99,121 @@ public class PeerDevice {
     public void connectToDevice() {
         Log.d(TAG, "connectToDevice: " + getMACAddress());
 
-        if (!isConnected()) {
+        if (getServerState() != CONNECTION_STATE.DISCONNECTED) {
+            Log.d(TAG, String.format("connectToDevice canceled, device %s is handled by GATT server", getMACAddress()));
+        } else if (checkAndSetClientState(CONNECTION_STATE.DISCONNECTED, CONNECTION_STATE.CONNECTING)) {
             BleDriver.mainHandler.postDelayed(new Runnable() {
                 @Override
                 public void run() {
-                    setState(CONNECTION_STATE.CONNECTING);
                     setBluetoothGatt(mBluetoothDevice.connectGatt(mContext, false,
                         mGattCallback, BluetoothDevice.TRANSPORT_LE));
                 }
             }, 100);
+        } else {
+            Log.d(TAG, String.format("connectToDevice canceled, device %s is not disconnected", getMACAddress()));
         }
     }
 
     public boolean isConnected() {
-        return getState() == CONNECTION_STATE.CONNECTED;
+        return getClientState() == CONNECTION_STATE.CONNECTED || getServerState() == CONNECTION_STATE.CONNECTED;
     }
 
     public boolean isDisconnected() {
-        return getState() == CONNECTION_STATE.DISCONNECTED;
+        return getClientState() == CONNECTION_STATE.DISCONNECTED && getServerState() == CONNECTION_STATE.DISCONNECTED;
     }
 
     private void disconnect() {
-        if (getState() == CONNECTION_STATE.CONNECTED || getState() == CONNECTION_STATE.CONNECTING) {
-            setState(CONNECTION_STATE.DISCONNECTING);
-            BleDriver.mainHandler.post(new Runnable() {
-                @Override
-                public void run() {
-                    if (getState() == CONNECTION_STATE.DISCONNECTING && getBluetoothGatt() != null) {
-                        getBluetoothGatt().disconnect();
-                        Log.i(TAG, String.format("force disconnect %s", mBluetoothDevice.getAddress()));
+        synchronized (mLockClientState) {
+            if (mClientState == CONNECTION_STATE.CONNECTED || mClientState == CONNECTION_STATE.CONNECTING) {
+                mClientState = CONNECTION_STATE.DISCONNECTING;
+                BleDriver.mainHandler.post(new Runnable() {
+                    @Override
+                    public void run() {
+                        synchronized (mLockClientState) {
+                            if (mClientState == CONNECTION_STATE.DISCONNECTING && getBluetoothGatt() != null) {
+                                getBluetoothGatt().disconnect();
+                                Log.i(TAG, String.format("force disconnect %s", mBluetoothDevice.getAddress()));
+                            }
+                        }
                     }
-                }
-            });
+                });
+            }
         }
+    }
+
+    public void close() {
+
+        if (getBluetoothGatt() != null) {
+            getBluetoothGatt().close();
+            setBluetoothGatt(null);
+        }
+        BleQueue.clear();
+        setClientReady(false);
+        setServerReady(false);
+        setPeer(null);
+        PeerManager.unregister(mRemotePID);
     }
 
     // setters and getters are accessed by the DeviceManager thread et this thread so we need to
     // synchronize them.
-    public void setState(CONNECTION_STATE state) {
-        synchronized (mLockState) {
-            mState = state;
+    public void setClientState(CONNECTION_STATE state) {
+        synchronized (mLockClientState) {
+            mClientState = state;
         }
     }
 
-    public CONNECTION_STATE getState() {
-        synchronized (mLockState) {
-            return mState;
+    public CONNECTION_STATE getClientState() {
+        synchronized (mLockClientState) {
+            return mClientState;
         }
     }
 
-    public void setBluetoothGatt(BluetoothGatt gatt) {
-        synchronized (mLockState) {
+    public boolean checkAndSetClientState(CONNECTION_STATE state, CONNECTION_STATE newState) {
+        Log.v(TAG, String.format("checkAndSetClientState called for device %s, state=%s newState=%s", getMACAddress(), state, newState));
+        synchronized (mLockClientState) {
+            if (mClientState == state) {
+                mClientState = newState;
+                return true;
+            }
+            return false;
+        }
+    }
+
+    public void setServerState(CONNECTION_STATE state) {
+        synchronized (mLockServerState) {
+            mServerState = state;
+        }
+    }
+
+    public CONNECTION_STATE getServerState() {
+        synchronized (mLockServerState) {
+            return mServerState;
+        }
+    }
+
+    public boolean checkAndSetServerState(CONNECTION_STATE state, CONNECTION_STATE newState) {
+        Log.v(TAG, String.format("checkAndSetServerState called for device %s, state=%s newState=%s", getMACAddress(), state, newState));
+        synchronized (mLockServerState) {
+            if (mServerState == state) {
+                mServerState = newState;
+                return true;
+            }
+            return false;
+        }
+    }
+
+    public synchronized void setBluetoothGatt(BluetoothGatt gatt) {
             mBluetoothGatt = gatt;
-        }
     }
 
-    public BluetoothGatt getBluetoothGatt() {
-        synchronized (mLockState) {
+    public synchronized BluetoothGatt getBluetoothGatt() {
             return mBluetoothGatt;
-        }
     }
 
     // isClient return if this PeerDevice is GATT client or server
     // A GATT client has a BluetoothGatt set, a server no.
     public boolean isClient() {
-        synchronized (mLockState) {
+        synchronized (mLockClientState) {
             return mBluetoothGatt != null;
         }
     }
@@ -248,15 +301,29 @@ public class PeerDevice {
             if ((peer = PeerManager.get(remotePID)) != null) {
                 Log.i(TAG, String.format("handleServerDataReceived: canceling connection for device %s because a connection with the peer %s already exists for device %s", getMACAddress(), remotePID, peer.getPeerDevice().getMACAddress()));
                 disconnect();
-                close();
                 return false;
             }
 
             setRemotePID(remotePID);
             peer = PeerManager.register(remotePID, this);
             setPeer(peer);
+            status = true;
         } else {
-            BleInterface.BLEReceiveFromPeer(getRemotePID(), payload);
+            //BleInterface.BLEReceiveFromPeer(getRemotePID(), payload);
+            status = BleQueue.add(new Runnable() {
+                @Override
+                public void run() {
+                    Log.d(TAG, String.format("BleQueue: BLEReceiveFromPeer for device %s", getMACAddress()));
+                    BleInterface.BLEReceiveFromPeer(getRemotePID(), payload);
+                    BleQueue.completedCommand();
+                }
+            });
+
+            if (status) {
+                BleQueue.nextCommand();
+            } else {
+                Log.e(TAG, "could not enqueue requestMtu command");
+            }
         }
         return status;
     }
@@ -283,7 +350,21 @@ public class PeerDevice {
             setServerReady(true);
             //peer.CallFoundPeer();
         } else {
-            BleInterface.BLEReceiveFromPeer(getRemotePID(), payload);
+            //BleInterface.BLEReceiveFromPeer(getRemotePID(), payload);
+            boolean result = BleQueue.add(new Runnable() {
+                @Override
+                public void run() {
+                    Log.d(TAG, String.format("BleQueue: BLEReceiveFromPeer for device %s", getMACAddress()));
+                    BleInterface.BLEReceiveFromPeer(getRemotePID(), payload);
+                    BleQueue.completedCommand();
+                }
+            });
+
+            if (result) {
+                BleQueue.nextCommand();
+            } else {
+                Log.e(TAG, "could not enqueue requestMtu command");
+            }
         }
     }
 
@@ -334,20 +415,6 @@ public class PeerDevice {
         synchronized (mLockServer) {
             return mServerReady;
         }
-    }
-
-    public void close() {
-
-        if (getBluetoothGatt() != null) {
-            getBluetoothGatt().close();
-            setBluetoothGatt(null);
-        }
-        BleQueue.clear();
-        setState(CONNECTION_STATE.DISCONNECTED);
-        setClientReady(false);
-        setServerReady(false);
-        setPeer(null);
-        PeerManager.unregister(mRemotePID);
     }
 
     private boolean takeBertyService(List<BluetoothGattService> services) {
@@ -422,15 +489,16 @@ public class PeerDevice {
     public boolean read() {
         Log.v(TAG, String.format("read() called for device %s", getMACAddress()));
 
-        if (!isConnected()) {
-            Log.e(TAG, "read failed: device not connected");
+        if (!isClient() || !isConnected()) {
+            Log.e(TAG, String.format("read failed: device %s not connected", getMACAddress()));
             return false;
         }
 
         boolean result = BleQueue.add(new Runnable() {
             @Override
             public void run() {
-                if (isConnected()) {
+                Log.v(TAG, String.format("BleQueue: read for device %s", getMACAddress()));
+                if (isClient() && isConnected()) {
                     if (!getBluetoothGatt().readCharacteristic(getReaderCharacteristic())) {
                         Log.e(TAG, String.format("readCharacteristic failed for characteristic: %s", getReaderCharacteristic().getUuid()));
                         BleQueue.completedCommand();
@@ -439,6 +507,7 @@ public class PeerDevice {
                         //mNrTries++;
                     }
                 } else {
+                    Log.e(TAG, String.format("read failed: device %s not connected", getMACAddress()));
                     BleQueue.completedCommand();
                 }
             }
@@ -455,7 +524,7 @@ public class PeerDevice {
     public boolean write(byte[] payload) {
         Log.v(TAG, String.format("write() called for device %s", getMACAddress()));
 
-        if (!isConnected()) {
+        if (!isClient() || !isConnected()) {
             Log.e(TAG, "write failed: device not connected");
             return false;
         }
@@ -465,7 +534,8 @@ public class PeerDevice {
         boolean result = BleQueue.add(new Runnable() {
             @Override
             public void run() {
-                if (isConnected()) {
+                Log.v(TAG, String.format("BleQueue: write for device %s", getMACAddress()));
+                if (isClient() && isConnected()) {
                     if (!getWriterCharacteristic().setValue(payload) || !getBluetoothGatt().writeCharacteristic(getWriterCharacteristic())) {
                         Log.e(TAG, String.format("writerCharacteristic failed for characteristic: %s", getWriterCharacteristic().getUuid()));
                         BleQueue.completedCommand();
@@ -487,18 +557,6 @@ public class PeerDevice {
         return result;
     }
 
-    public boolean writeLocalPID() {
-        Log.v(TAG, "writeLocalPID() called");
-
-        BluetoothGattCharacteristic writer = getWriterCharacteristic();
-        writer.setValue(mLocalPID);
-        if (!mBluetoothGatt.writeCharacteristic(writer)) {
-            Log.e(TAG, "writeLocalPID() error");
-            return false;
-        }
-        return true;
-    }
-
     private boolean requestMtu(final int mtu) {
         Log.v(TAG, "requestMtu called");
 
@@ -507,7 +565,7 @@ public class PeerDevice {
             return false;
         }
 
-        if (!isConnected()) {
+        if (!isClient() || !isConnected()) {
             Log.e(TAG, "request mtu failed: device not connected");
             return false;
         }
@@ -515,7 +573,8 @@ public class PeerDevice {
         boolean result = BleQueue.add(new Runnable() {
             @Override
             public void run() {
-                if (isConnected()) {
+                Log.v(TAG, String.format("BleQueue: requestMtu for device %s", getMACAddress()));
+                if (isClient() && isConnected()) {
                     if (!getBluetoothGatt().requestMtu(mtu)) {
                         Log.e(TAG, "requestMtu failed");
                         BleQueue.completedCommand();
@@ -548,20 +607,18 @@ public class PeerDevice {
         Log.d(TAG, "handshake: called");
         if (takeBertyService(getBluetoothGatt().getServices())) {
             if (takeBertyCharacteristics()) {
-                requestMtu(MAX_MTU);
+                //requestMtu(MAX_MTU);
 
                 // send local PID
                 if (!write(mLocalPID.getBytes())) {
                     Log.e(TAG, String.format("handshake: fail to send local PID for device %s", getMACAddress()));
                     disconnect();
-                    close();
                 }
 
                 // get remote PID
                 if (!read()) {
                     Log.e(TAG, String.format("handshake: fail to read remote PID for device %s", getMACAddress()));
                     disconnect();
-                    close();
                 }
             }
         }
@@ -575,10 +632,10 @@ public class PeerDevice {
                     Log.v(TAG, "onConnectionStateChange() called by device " + gatt.getDevice().getAddress());
                     BluetoothDevice device = gatt.getDevice();
 
-                    if(status == GATT_SUCCESS) {
+                    if (status == GATT_SUCCESS) {
                         if (newState == BluetoothProfile.STATE_CONNECTED) {
                             Log.d(TAG, "onConnectionStateChange(): connected");
-                            setState(CONNECTION_STATE.CONNECTED);
+                            setClientState(CONNECTION_STATE.CONNECTED);
 
                             int bondState = device.getBondState();        // Take action depending on the bond state
                             if(bondState == BOND_NONE || bondState == BOND_BONDED) {
@@ -604,8 +661,10 @@ public class PeerDevice {
                         } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                             Log.d(TAG, "onConnectionStateChange(): disconnected");
                             BleInterface.BLEHandleLostPeer(getRemotePID());
-                            setState(CONNECTION_STATE.DISCONNECTED);
-                            setBluetoothGatt(null);
+                            if (getClientState() == CONNECTION_STATE.CONNECTED) {
+                                close();
+                            }
+                            setClientState(CONNECTION_STATE.DISCONNECTED);
                         } else {
                             Log.e(TAG, "onConnectionStateChange(): unknown state");
                             close();
