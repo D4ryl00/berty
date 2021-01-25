@@ -13,6 +13,7 @@ import android.util.Log;
 
 import androidx.annotation.NonNull;
 
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.List;
 import java.util.Queue;
@@ -49,8 +50,7 @@ public class PeerDevice {
     private BluetoothDevice mBluetoothDevice;
     private BluetoothGatt mBluetoothGatt;
 
-    public final Object mLockClientState = new Object();
-    public final Object mLockServerState = new Object();
+    public final Object mLockState = new Object();
     private final Object mLockRemotePID = new Object();
     private final Object mLockMtu = new Object();
     private final Object mLockClient = new Object();
@@ -99,18 +99,20 @@ public class PeerDevice {
     public void connectToDevice() {
         Log.d(TAG, "connectToDevice: " + getMACAddress());
 
-        if (getServerState() != CONNECTION_STATE.DISCONNECTED) {
-            Log.d(TAG, String.format("connectToDevice canceled, device %s is handled by GATT server", getMACAddress()));
-        } else if (checkAndSetClientState(CONNECTION_STATE.DISCONNECTED, CONNECTION_STATE.CONNECTING)) {
-            BleDriver.mainHandler.postDelayed(new Runnable() {
-                @Override
-                public void run() {
-                    setBluetoothGatt(mBluetoothDevice.connectGatt(mContext, false,
-                        mGattCallback, BluetoothDevice.TRANSPORT_LE));
-                }
-            }, 100);
-        } else {
-            Log.d(TAG, String.format("connectToDevice canceled, device %s is not disconnected", getMACAddress()));
+        synchronized (mLockState) {
+            if (getServerState() != CONNECTION_STATE.DISCONNECTED) {
+                Log.d(TAG, String.format("connectToDevice canceled, device %s is handled by GATT server", getMACAddress()));
+            } else if (checkAndSetClientState(CONNECTION_STATE.DISCONNECTED, CONNECTION_STATE.CONNECTING)) {
+                BleDriver.mainHandler.postDelayed(new Runnable() {
+                    @Override
+                    public void run() {
+                        setBluetoothGatt(mBluetoothDevice.connectGatt(mContext, false,
+                            mGattCallback, BluetoothDevice.TRANSPORT_LE));
+                    }
+                }, 100);
+            } else {
+                Log.d(TAG, String.format("connectToDevice canceled, device %s is not disconnected", getMACAddress()));
+            }
         }
     }
 
@@ -123,13 +125,13 @@ public class PeerDevice {
     }
 
     private void disconnect() {
-        synchronized (mLockClientState) {
+        synchronized (mLockState) {
             if (mClientState == CONNECTION_STATE.CONNECTED || mClientState == CONNECTION_STATE.CONNECTING) {
                 mClientState = CONNECTION_STATE.DISCONNECTING;
                 BleDriver.mainHandler.post(new Runnable() {
                     @Override
                     public void run() {
-                        synchronized (mLockClientState) {
+                        synchronized (mLockState) {
                             if (mClientState == CONNECTION_STATE.DISCONNECTING && getBluetoothGatt() != null) {
                                 getBluetoothGatt().disconnect();
                                 Log.i(TAG, String.format("force disconnect %s", mBluetoothDevice.getAddress()));
@@ -157,20 +159,20 @@ public class PeerDevice {
     // setters and getters are accessed by the DeviceManager thread et this thread so we need to
     // synchronize them.
     public void setClientState(CONNECTION_STATE state) {
-        synchronized (mLockClientState) {
+        synchronized (mLockState) {
             mClientState = state;
         }
     }
 
     public CONNECTION_STATE getClientState() {
-        synchronized (mLockClientState) {
+        synchronized (mLockState) {
             return mClientState;
         }
     }
 
     public boolean checkAndSetClientState(CONNECTION_STATE state, CONNECTION_STATE newState) {
         Log.v(TAG, String.format("checkAndSetClientState called for device %s, state=%s newState=%s", getMACAddress(), state, newState));
-        synchronized (mLockClientState) {
+        synchronized (mLockState) {
             if (mClientState == state) {
                 mClientState = newState;
                 return true;
@@ -180,20 +182,20 @@ public class PeerDevice {
     }
 
     public void setServerState(CONNECTION_STATE state) {
-        synchronized (mLockServerState) {
+        synchronized (mLockState) {
             mServerState = state;
         }
     }
 
     public CONNECTION_STATE getServerState() {
-        synchronized (mLockServerState) {
+        synchronized (mLockState) {
             return mServerState;
         }
     }
 
     public boolean checkAndSetServerState(CONNECTION_STATE state, CONNECTION_STATE newState) {
         Log.v(TAG, String.format("checkAndSetServerState called for device %s, state=%s newState=%s", getMACAddress(), state, newState));
-        synchronized (mLockServerState) {
+        synchronized (mLockState) {
             if (mServerState == state) {
                 mServerState = newState;
                 return true;
@@ -213,7 +215,7 @@ public class PeerDevice {
     // isClient return if this PeerDevice is GATT client or server
     // A GATT client has a BluetoothGatt set, a server no.
     public boolean isClient() {
-        synchronized (mLockClientState) {
+        synchronized (mLockState) {
             return mBluetoothGatt != null;
         }
     }
@@ -667,11 +669,17 @@ public class PeerDevice {
                             setClientState(CONNECTION_STATE.DISCONNECTED);
                         } else {
                             Log.e(TAG, "onConnectionStateChange(): unknown state");
-                            close();
+                            if (getClientState() == CONNECTION_STATE.CONNECTED) {
+                                close();
+                            }
+                            setClientState(CONNECTION_STATE.DISCONNECTED);
                         }
                     } else {
                         Log.e(TAG, "onConnectionStateChange(): status error=" + status);
-                        close();
+                        if (getClientState() == CONNECTION_STATE.CONNECTED) {
+                            close();
+                        }
+                        setClientState(CONNECTION_STATE.DISCONNECTED);
                     }
                 }
 
@@ -756,7 +764,7 @@ public class PeerDevice {
                     Log.v(TAG, String.format("onCharacteristicChanged called for device %s", getMACAddress()));
 
                     byte[] value = characteristic.getValue();
-                    Log.d(TAG, String.format("onCharacteristicChanged: value is %s", Base64.getEncoder().encodeToString(value)));
+                    Log.d(TAG, String.format("onCharacteristicChanged: value=%s", Arrays.toString(value)));
                     handleClientDataReceived(value);
                 }
     };

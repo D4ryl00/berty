@@ -9,6 +9,7 @@ import android.content.Context;
 import android.os.ParcelUuid;
 import android.util.Log;
 
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
@@ -24,6 +25,8 @@ import static android.content.Context.BLUETOOTH_SERVICE;
 
 public class GattServer {
     private final String TAG = "bty.ble.GattServer";
+
+    private static final int ATT_HEADER_SIZE = 3;
 
     // GATT service UUID
     static final UUID SERVICE_UUID = UUID.fromString("A06C6AB8-886F-4D56-82FC-2CF8610D668D");
@@ -167,7 +170,7 @@ public class GattServer {
             return false;
         }
 
-        Log.d(TAG, String.format("writeAndNotify: value is %s", Base64.getEncoder().encodeToString(payload)));
+        Log.d(TAG, String.format("writeAndNotify: value=%s length=%d mtu=%d ATT_HEADER_SIZE=%d", Arrays.toString(payload), payload.length, device.getMtu(), ATT_HEADER_SIZE));
 
         boolean result = BleQueue.add(new Runnable() {
             @Override
@@ -180,9 +183,25 @@ public class GattServer {
                     Log.e(TAG, "writeAndNotify: reader characteristic is null");
                     BleQueue.completedCommand();
                 } else {
-                    mReaderCharacteristic.setValue(payload);
-                    if (!mBluetoothGattServer.notifyCharacteristicChanged(device.getBluetoothDevice(), mReaderCharacteristic, true)) {
-                        Log.e(TAG, String.format("notifyCharacteristicChanged failed for device %s", device.getMACAddress()));
+                    byte[] toWrite;
+                    int minOffset = 0;
+                    int maxOffset;
+
+                    // Send data to fit with MTU value
+                    while (minOffset < payload.length) {
+                        maxOffset = minOffset + device.getMtu() - ATT_HEADER_SIZE > payload.length ? payload.length : minOffset + device.getMtu() - ATT_HEADER_SIZE;
+                        toWrite = Arrays.copyOfRange(payload, minOffset, maxOffset);
+                        minOffset = maxOffset;
+                        /*if (payload.length - offset > device.getMtu() - ATT_HEADER_SIZE) {
+                            toWrite = Arrays.copyOfRange(payload, offset, payload.length - offset - device.getMtu());
+                            offset =
+                        }*/
+                        Log.d(TAG, String.format("BleQueue: writeAndNotify: chunk value=%s length=%d", Arrays.toString(toWrite), toWrite.length));
+                        mReaderCharacteristic.setValue(toWrite);
+                        if (!mBluetoothGattServer.notifyCharacteristicChanged(device.getBluetoothDevice(), mReaderCharacteristic, true)) {
+                            Log.e(TAG, String.format("BleQueue: writeAndNotify: notifyCharacteristicChanged failed for device %s", device.getMACAddress()));
+                            return ;
+                        }
                     }
                 }
             }
