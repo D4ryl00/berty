@@ -40,7 +40,7 @@ func (rbm *RingBufferMap) Add(peerID string, payload []byte) {
 	var rBuffer *ringBuffer
 
 	rbm.Lock()
-	rBuffer, ok := rbm.cache[string(peerID)]
+	rBuffer, ok := rbm.cache[peerID]
 	rbm.Unlock()
 	if !ok {
 		rBuffer = &ringBuffer{
@@ -54,7 +54,7 @@ func (rbm *RingBufferMap) Add(peerID string, payload []byte) {
 	rBuffer.Unlock()
 
 	rbm.Lock()
-	rbm.cache[string(peerID)] = rBuffer
+	rbm.cache[peerID] = rBuffer
 	rbm.Unlock()
 }
 
@@ -66,7 +66,7 @@ func (rbm *RingBufferMap) Flush(peerID string) <-chan []byte {
 
 	go func() {
 		rbm.Lock()
-		rBuffer, ok := rbm.cache[string(peerID)]
+		rBuffer, ok := rbm.cache[peerID]
 		rbm.Unlock()
 
 		if ok {
@@ -87,7 +87,7 @@ func (rbm *RingBufferMap) Flush(peerID string) <-chan []byte {
 			rBuffer.Unlock()
 
 			rbm.Lock()
-			delete(rbm.cache, string(peerID))
+			delete(rbm.cache, peerID)
 			rbm.Unlock()
 		}
 

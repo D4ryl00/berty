@@ -86,9 +86,6 @@ func (c *Conn) Read(payload []byte) (n int, err error) {
 		return 0, fmt.Errorf("error: Conn.Read failed: conn already closed")
 	}
 
-	// Flush the transport cache
-	//c.flushCache(c.transport.cache)
-
 	n, err = c.readOut.Read(payload)
 	if err != nil {
 		c.transport.logger.Error("Conn.Read failed: native read failed")
@@ -112,7 +109,6 @@ func (c *Conn) Write(payload []byte) (n int, err error) {
 		c.Lock()
 		if !c.ready {
 			c.ready = true
-			//c.flushCache(c.cache)
 		}
 		c.Unlock()
 	}
@@ -141,21 +137,6 @@ func (c *Conn) Close() error {
 	c.transport.connMap.Delete(c.RemoteAddr().String())
 
 	return nil
-}
-
-// flushCache gets cached payloads and puts in the pipe reader
-func (c *Conn) flushCache(cache *RingBufferMap) {
-	c.transport.logger.Debug("flushCache() calleddd")
-	payloads := cache.Flush(c.RemoteAddr().String())
-	for payload := range payloads {
-		_, err := c.readIn.Write(payload)
-		if err != nil {
-			c.transport.logger.Error("flushCache: write pipe error", zap.Error(err))
-		} else {
-			c.transport.logger.Debug("flushCache: successful write pipe")
-		}
-	}
-	c.transport.logger.Debug("flushCache() enddd")
 }
 
 // isReady tells if  libp2p is ready to accept input connections
