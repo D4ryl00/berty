@@ -203,6 +203,12 @@ public class GattServer {
                             return ;
                         }
                     }
+
+                    // Sent an empty value to terminate transfer
+                    mReaderCharacteristic.setValue("");
+                    if (!mBluetoothGattServer.notifyCharacteristicChanged(device.getBluetoothDevice(), mReaderCharacteristic, true)) {
+                        Log.e(TAG, String.format("BleQueue: writeAndNotify: notifyCharacteristicChanged failed for device %s", device.getMACAddress()));
+                    }
                 }
             }
         });

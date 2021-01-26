@@ -68,6 +68,8 @@ public class PeerDevice {
     private boolean mServerReady = false;
     private boolean mDiscoveryStarted = false;
 
+    private byte[] mBuffer;
+
     //private int mMtu = 0;
     // default MTU is 23
     private int mMtu = 23;
@@ -125,6 +127,7 @@ public class PeerDevice {
     }
 
     private void disconnect() {
+        Log.v(TAG, String.format("disconnect called for device %s", getMACAddress()));
         synchronized (mLockState) {
             if (mClientState == CONNECTION_STATE.CONNECTED || mClientState == CONNECTION_STATE.CONNECTING) {
                 mClientState = CONNECTION_STATE.DISCONNECTING;
@@ -133,8 +136,8 @@ public class PeerDevice {
                     public void run() {
                         synchronized (mLockState) {
                             if (mClientState == CONNECTION_STATE.DISCONNECTING && getBluetoothGatt() != null) {
+                                Log.i(TAG, String.format("disconnecting %s", getMACAddress()));
                                 getBluetoothGatt().disconnect();
-                                Log.i(TAG, String.format("force disconnect %s", mBluetoothDevice.getAddress()));
                             }
                         }
                     }
@@ -609,7 +612,7 @@ public class PeerDevice {
         Log.d(TAG, "handshake: called");
         if (takeBertyService(getBluetoothGatt().getServices())) {
             if (takeBertyCharacteristics()) {
-                //requestMtu(MAX_MTU);
+                requestMtu(MAX_MTU);
 
                 // send local PID
                 if (!write(mLocalPID.getBytes())) {
@@ -622,8 +625,21 @@ public class PeerDevice {
                     Log.e(TAG, String.format("handshake: fail to read remote PID for device %s", getMACAddress()));
                     disconnect();
                 }
+
+                return ;
             }
         }
+        disconnect();
+    }
+
+    private void addToBuffer(byte[] value) {
+        if (mBuffer == null) {
+            mBuffer = new byte[0];
+        }
+        byte[] tmp = new byte[mBuffer.length + value.length];
+        System.arraycopy(mBuffer, 0, tmp, 0, mBuffer.length);
+        System.arraycopy(value, 0, tmp, mBuffer.length, value.length);
+        mBuffer = tmp;
     }
 
     private BluetoothGattCallback mGattCallback =
@@ -631,12 +647,12 @@ public class PeerDevice {
                 @Override
                 public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
                     super.onConnectionStateChange(gatt, status, newState);
-                    Log.v(TAG, "onConnectionStateChange() called by device " + gatt.getDevice().getAddress());
+                    Log.v(TAG, String.format("onConnectionStateChange() called by device %s", gatt.getDevice().getAddress()));
                     BluetoothDevice device = gatt.getDevice();
 
                     if (status == GATT_SUCCESS) {
                         if (newState == BluetoothProfile.STATE_CONNECTED) {
-                            Log.d(TAG, "onConnectionStateChange(): connected");
+                            Log.d(TAG, String.format("onConnectionStateChange(): device %s connected", device.getAddress()));
                             setClientState(CONNECTION_STATE.CONNECTED);
 
                             int bondState = device.getBondState();        // Take action depending on the bond state
@@ -648,11 +664,11 @@ public class PeerDevice {
                                 }
                                 final int delay = bondState == BOND_BONDED ? delayWhenBonded : 0;
                                 final Runnable discoverRunnable = () -> {
-                                    Log.d(TAG, "Continuing connection of " + device.getAddress() + " with delay of " + delay + " ms");
+                                    Log.d(TAG, String.format("Continuing connection of %s with delay of %d ms", device.getAddress(), delay));
                                     if (gatt.discoverServices()) {
                                         mDiscoveryStarted = true;
                                     } else {
-                                        Log.d(TAG, "discoverServices failed to start");
+                                        Log.d(TAG, String.format("discoverServices failed to start for device %s", device.getAddress()));
                                     }
                                 };
                                 BleDriver.mainHandler.postDelayed(discoverRunnable, delay);
@@ -661,21 +677,21 @@ public class PeerDevice {
                                 Log.i(TAG, "waiting for bonding to complete");
                             }
                         } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
-                            Log.d(TAG, "onConnectionStateChange(): disconnected");
+                            Log.d(TAG, String.format("onConnectionStateChange(): device %s disconnected", device.getAddress()));
                             BleInterface.BLEHandleLostPeer(getRemotePID());
                             if (getClientState() == CONNECTION_STATE.CONNECTED) {
                                 close();
                             }
                             setClientState(CONNECTION_STATE.DISCONNECTED);
                         } else {
-                            Log.e(TAG, "onConnectionStateChange(): unknown state");
+                            Log.e(TAG, String.format("onConnectionStateChange(): unknown state for device %s", device.getAddress()));
                             if (getClientState() == CONNECTION_STATE.CONNECTED) {
                                 close();
                             }
                             setClientState(CONNECTION_STATE.DISCONNECTED);
                         }
                     } else {
-                        Log.e(TAG, "onConnectionStateChange(): status error=" + status);
+                        Log.e(TAG, String.format("onConnectionStateChange(): status error=%d for device %s", status, device.getAddress()));
                         if (getClientState() == CONNECTION_STATE.CONNECTED) {
                             close();
                         }
@@ -763,9 +779,18 @@ public class PeerDevice {
                     super.onCharacteristicChanged(gatt, characteristic);
                     Log.v(TAG, String.format("onCharacteristicChanged called for device %s", getMACAddress()));
 
+                    byte[] copy;
+
                     byte[] value = characteristic.getValue();
                     Log.d(TAG, String.format("onCharacteristicChanged: value=%s", Arrays.toString(value)));
-                    handleClientDataReceived(value);
+                    if (value.length == 0) { // end of transmission
+                        copy = new byte[mBuffer.length];
+                        System.arraycopy(mBuffer, 0, copy, 0, mBuffer.length);
+                        mBuffer = null;
+                        handleClientDataReceived(copy);
+                    } else { // transmission in progress
+                        addToBuffer(value);
+                    }
                 }
     };
 }

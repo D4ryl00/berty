@@ -88,12 +88,12 @@ public class GattServerCallback extends BluetoothGattServerCallback {
                     mGattServer.getGattServer().cancelConnection(device);
                 }
             } else {
-                Log.d(TAG, "disconnected");
+                Log.d(TAG, String.format("onConnectionStateChange: device %s disconnected", device.getAddress()));
                 if (peerDevice != null) {
-                    peerDevice.setServerState(PeerDevice.CONNECTION_STATE.DISCONNECTED);
                     if (peerDevice.getServerState() == PeerDevice.CONNECTION_STATE.CONNECTED) {
                         BleInterface.BLEHandleLostPeer(peerDevice.getRemotePID());
                     }
+                    peerDevice.setServerState(PeerDevice.CONNECTION_STATE.DISCONNECTED);
                 }
             }
         } else {
@@ -206,8 +206,10 @@ public class GattServerCallback extends BluetoothGattServerCallback {
         if (execute) {
             if (mBuffer != null) {
                 if ((peerDevice = DeviceManager.get(device.getAddress())) == null) {
-                    Log.e(TAG, "onExecuteWrite: device not found");
+                    Log.e(TAG, String.format("onExecuteWrite: device %s not found", device.getAddress()));
                     status = false;
+                } else if (peerDevice.getServerState() != PeerDevice.CONNECTION_STATE.CONNECTED) {
+                    Log.e(TAG, String.format("onExecuteWrite: device not connected", device.getAddress()));
                 } else {
                     status = peerDevice.handleServerDataReceived(mBuffer);
                 }
