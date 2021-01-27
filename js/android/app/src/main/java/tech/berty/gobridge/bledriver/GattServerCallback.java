@@ -67,7 +67,7 @@ public class GattServerCallback extends BluetoothGattServerCallback {
     public void onConnectionStateChange(BluetoothDevice device, int status, int newState) {
         super.onConnectionStateChange(device, status, newState);
 
-        Log.v(TAG, String.format("onConnectionStateChange called for device %s with newState %d", device, newState));
+        Log.v(TAG, String.format("onConnectionStateChange: device=%s status=%d newState=%d", device, status, newState));
         PeerDevice peerDevice = DeviceManager.get(device.getAddress());
 
         if (status == GATT_SUCCESS) {
@@ -80,10 +80,11 @@ public class GattServerCallback extends BluetoothGattServerCallback {
                     DeviceManager.addDevice(peerDevice);
                 }
 
-                if (peerDevice.getClientState() != PeerDevice.CONNECTION_STATE.DISCONNECTED) {
+                /*if (peerDevice.getClientState() != PeerDevice.CONNECTION_STATE.DISCONNECTED) {
                     Log.d(TAG, String.format("onConnectionStateChange: connection already made as client, cancel this one for device %s", device.getAddress()));
                     mGattServer.getGattServer().cancelConnection(device);
-                } else if (!peerDevice.checkAndSetServerState(PeerDevice.CONNECTION_STATE.DISCONNECTED, PeerDevice.CONNECTION_STATE.CONNECTED)) {
+                } else */
+                if (!peerDevice.checkAndSetServerState(PeerDevice.CONNECTION_STATE.DISCONNECTED, PeerDevice.CONNECTION_STATE.CONNECTED)) {
                     Log.d(TAG, String.format("onConnectionStateChange: a server connection already exists, cancel this one for device %s", device.getAddress()));
                     mGattServer.getGattServer().cancelConnection(device);
                 }

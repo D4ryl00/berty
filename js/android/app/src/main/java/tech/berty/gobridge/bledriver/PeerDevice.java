@@ -304,8 +304,8 @@ public class PeerDevice {
 
             // check if a connection already exists
             if ((peer = PeerManager.get(remotePID)) != null) {
-                Log.i(TAG, String.format("handleServerDataReceived: canceling connection for device %s because a connection with the peer %s already exists for device %s", getMACAddress(), remotePID, peer.getPeerDevice().getMACAddress()));
-                disconnect();
+                Log.i(TAG, String.format("handleServerDataReceived: device=%s: a connection with the peer %s already exists with other device %s", getMACAddress(), remotePID, peer.getPeerDevice().getMACAddress()));
+                //disconnect();
                 return false;
             }
 
@@ -342,9 +342,9 @@ public class PeerDevice {
 
             // check if a connection already exists
             if ((peer = PeerManager.get(remotePID)) != null) {
-                Log.i(TAG, String.format("handleClientDataReceived: canceling connection for device %s because a connection with the peer %s already exists for device %s", getMACAddress(), remotePID, peer.getPeerDevice().getMACAddress()));
-                disconnect();
-                close();
+                Log.i(TAG, String.format("handleClientDataReceived: device=%s: a connection with the peer %s already exists with other device %s", getMACAddress(), remotePID, peer.getPeerDevice().getMACAddress()));
+                //disconnect();
+                //close();
                 return ;
             }
 
@@ -647,7 +647,7 @@ public class PeerDevice {
                 @Override
                 public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
                     super.onConnectionStateChange(gatt, status, newState);
-                    Log.v(TAG, String.format("onConnectionStateChange() called by device %s", gatt.getDevice().getAddress()));
+                    Log.v(TAG, String.format("onConnectionStateChange(): device=%s status=%d newState=%d", gatt.getDevice().getAddress(), status, newState));
                     BluetoothDevice device = gatt.getDevice();
 
                     if (status == GATT_SUCCESS) {
