@@ -1,16 +1,15 @@
 package proximitytransport
 
 import (
-	"bytes"
 	"context"
 	"encoding/base64"
-	"encoding/gob"
 	"fmt"
 	"io"
 	"net"
 	"sync"
 	"time"
 
+	"github.com/golang/protobuf/proto"
 	peer "github.com/libp2p/go-libp2p-core/peer"
 	tpt "github.com/libp2p/go-libp2p-core/transport"
 	ma "github.com/multiformats/go-multiaddr"
@@ -37,7 +36,7 @@ type Conn struct {
 	cache *RingBufferMap
 	mp    *mplex
 
-	order int
+	count uint64
 
 	ctx       context.Context
 	cancel    func()
@@ -61,7 +60,7 @@ func newConn(ctx context.Context, t *proximityTransport, remoteMa ma.Multiaddr,
 		ready:     false,
 		cache:     NewRingBufferMap(t.logger, 128),
 		mp:        newMplex(connCtx, t.logger),
-		order:     0,
+		count:     0,
 		ctx:       connCtx,
 		cancel:    cancel,
 		transport: t,
@@ -111,22 +110,19 @@ func (c *Conn) Write(payload []byte) (n int, err error) {
 	}
 
 	// Debug order
-	fmt.Printf("write bytes=%v order=%d", payload, c.order)
-	var buf bytes.Buffer
-	enc := gob.NewEncoder(&buf)
-	dd := dataDebug{
-		Order: c.order,
+	fmt.Printf("write bytes=%v count=%d", payload, c.count)
+	message := &MessageCount{
+		Count: c.count,
 		Data:  payload,
 	}
-	err = enc.Encode(dd)
+	data, err := proto.Marshal(message)
 	if err != nil {
-		c.transport.logger.Debug("write buffer panic")
-		panic(err)
+		c.transport.logger.Error("Conn.Write: protobuf Marshal error")
+		return 0, err
 	}
-	c.order = c.order + 1
-	value := buf.Bytes()
-	//c.transport.logger.Debug("Write", zap.Binary("new payload", value), zap.Int("order", dd.Order))
-	fmt.Println("write after gob", base64.StdEncoding.EncodeToString(value), value)
+	c.count = c.count + 1
+	c.transport.logger.Debug("Write", zap.Binary("new payload", data))
+	fmt.Println("write after Marshal", base64.StdEncoding.EncodeToString(data), data)
 	// Debug order end
 
 	// Set connection as ready and flush cached payloads
@@ -139,13 +135,13 @@ func (c *Conn) Write(payload []byte) (n int, err error) {
 	}
 
 	// Write to the peer's device using native driver.
-	if !c.transport.driver.SendToPeer(c.RemoteAddr().String(), value) {
+	if !c.transport.driver.SendToPeer(c.RemoteAddr().String(), data) {
 		c.transport.logger.Debug("Conn.Write failed")
 		return 0, fmt.Errorf("error: Conn.Write failed: native write failed")
 	}
 	c.transport.logger.Debug("Conn.Write successful")
 
-	return len(value), nil
+	return len(data), nil
 }
 
 // Close closes the connection.

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/golang/protobuf/proto"
 	host "github.com/libp2p/go-libp2p-core/host"
 	peer "github.com/libp2p/go-libp2p-core/peer"
 	pstore "github.com/libp2p/go-libp2p-core/peerstore"
@@ -45,11 +46,6 @@ type proximityTransport struct {
 	driver   NativeDriver
 	logger   *zap.Logger
 	ctx      context.Context
-}
-
-type dataDebug struct {
-	Order int
-	Data  []byte
 }
 
 func NewTransport(ctx context.Context, l *zap.Logger, driver NativeDriver) func(h host.Host, u *tptu.Upgrader) (*proximityTransport, error) {
@@ -166,18 +162,16 @@ func (t *proximityTransport) ReceiveFromPeer(remotePID string, payload []byte) {
 	fmt.Println("ReceiveFromPeer", base64.StdEncoding.EncodeToString(value), value)
 
 	// Debug order
-	/*buf := bytes.NewBuffer(value)
-	dec := gob.NewDecoder(buf)
-	dd := dataDebug{}
-	err := dec.Decode(&dd)
+	message := &MessageCount{}
+	err := proto.Unmarshal(value, message)
 	if err != nil {
-		t.logger.Debug("ReceiveFromPeer error panic")
-		panic(err)
+		t.logger.Error("ReceiveFromPeer protobuf Unmarshal error")
+		return
 	}
 	//payload = dd.Data
-	value2 := make([]byte, len(dd.Data))
-	copy(value2, dd.Data)
-	t.logger.Debug("ReceiveFromPeer", zap.Binary("new payload", value2), zap.Int("order", dd.Order))*/
+	data := make([]byte, len(message.Data))
+	copy(data, message.Data)
+	t.logger.Debug("ReceiveFromPeer", zap.Binary("new payload", data), zap.Uint64("count", message.Count))
 	// Debug order end
 
 	c, ok := t.connMap.Load(remotePID)
@@ -187,7 +181,7 @@ func (t *proximityTransport) ReceiveFromPeer(remotePID string, payload []byte) {
 			c.(*Conn).Lock()
 			if !c.(*Conn).ready {
 				t.logger.Info("ReceiveFromPeer: connection is not ready to accept incoming packets, add it to cache")
-				c.(*Conn).cache.Add(remotePID, value)
+				c.(*Conn).cache.Add(remotePID, data)
 				c.(*Conn).Unlock()
 				return
 			}
@@ -195,10 +189,10 @@ func (t *proximityTransport) ReceiveFromPeer(remotePID string, payload []byte) {
 		}
 
 		// Write the payload into pipe
-		c.(*Conn).mp.input <- value
+		c.(*Conn).mp.input <- data
 	} else {
 		t.logger.Info("ReceiveFromPeer: no Conn found, put payload in cache")
-		t.cache.Add(remotePID, value)
+		t.cache.Add(remotePID, data)
 	}
 }
 
