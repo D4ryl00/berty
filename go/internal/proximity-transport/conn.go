@@ -1,7 +1,10 @@
 package proximitytransport
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
+	"encoding/gob"
 	"fmt"
 	"io"
 	"net"
@@ -34,6 +37,8 @@ type Conn struct {
 	cache *RingBufferMap
 	mp    *mplex
 
+	order int
+
 	ctx       context.Context
 	cancel    func()
 	transport *proximityTransport
@@ -56,6 +61,7 @@ func newConn(ctx context.Context, t *proximityTransport, remoteMa ma.Multiaddr,
 		ready:     false,
 		cache:     NewRingBufferMap(t.logger, 128),
 		mp:        newMplex(connCtx, t.logger),
+		order:     0,
 		ctx:       connCtx,
 		cancel:    cancel,
 		transport: t,
@@ -99,10 +105,29 @@ func (c *Conn) Read(payload []byte) (n int, err error) {
 // Write writes data to the connection.
 // Timeout handled by the native driver.
 func (c *Conn) Write(payload []byte) (n int, err error) {
-	c.transport.logger.Debug("Conn.Write", zap.String("remoteAddr", c.RemoteAddr().String()), zap.Any("payload", payload))
+	c.transport.logger.Debug("Conn.Write", zap.String("remoteAddr", c.RemoteAddr().String()), zap.Binary("payload", payload))
 	if c.ctx.Err() != nil {
 		return 0, fmt.Errorf("error: Conn.Write failed: conn already closed")
 	}
+
+	// Debug order
+	fmt.Printf("write bytes=%v order=%d", payload, c.order)
+	var buf bytes.Buffer
+	enc := gob.NewEncoder(&buf)
+	dd := dataDebug{
+		Order: c.order,
+		Data:  payload,
+	}
+	err = enc.Encode(dd)
+	if err != nil {
+		c.transport.logger.Debug("write buffer panic")
+		panic(err)
+	}
+	c.order = c.order + 1
+	value := buf.Bytes()
+	//c.transport.logger.Debug("Write", zap.Binary("new payload", value), zap.Int("order", dd.Order))
+	fmt.Println("write after gob", base64.StdEncoding.EncodeToString(value), value)
+	// Debug order end
 
 	// Set connection as ready and flush cached payloads
 	if !c.isReady() {
@@ -114,13 +139,13 @@ func (c *Conn) Write(payload []byte) (n int, err error) {
 	}
 
 	// Write to the peer's device using native driver.
-	if !c.transport.driver.SendToPeer(c.RemoteAddr().String(), payload) {
+	if !c.transport.driver.SendToPeer(c.RemoteAddr().String(), value) {
 		c.transport.logger.Debug("Conn.Write failed")
 		return 0, fmt.Errorf("error: Conn.Write failed: native write failed")
 	}
 	c.transport.logger.Debug("Conn.Write successful")
 
-	return len(payload), nil
+	return len(value), nil
 }
 
 // Close closes the connection.

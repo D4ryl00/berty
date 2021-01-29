@@ -2,6 +2,7 @@ package proximitytransport
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"sync"
 
@@ -44,6 +45,11 @@ type proximityTransport struct {
 	driver   NativeDriver
 	logger   *zap.Logger
 	ctx      context.Context
+}
+
+type dataDebug struct {
+	Order int
+	Data  []byte
 }
 
 func NewTransport(ctx context.Context, l *zap.Logger, driver NativeDriver) func(h host.Host, u *tptu.Upgrader) (*proximityTransport, error) {
@@ -155,6 +161,24 @@ func (t *proximityTransport) ReceiveFromPeer(remotePID string, payload []byte) {
 	// copy value from driver
 	value := make([]byte, len(payload))
 	copy(value, payload)
+
+	t.logger.Debug("ReceiveFromPeer()", zap.Binary("value", value))
+	fmt.Println("ReceiveFromPeer", base64.StdEncoding.EncodeToString(value), value)
+
+	// Debug order
+	/*buf := bytes.NewBuffer(value)
+	dec := gob.NewDecoder(buf)
+	dd := dataDebug{}
+	err := dec.Decode(&dd)
+	if err != nil {
+		t.logger.Debug("ReceiveFromPeer error panic")
+		panic(err)
+	}
+	//payload = dd.Data
+	value2 := make([]byte, len(dd.Data))
+	copy(value2, dd.Data)
+	t.logger.Debug("ReceiveFromPeer", zap.Binary("new payload", value2), zap.Int("order", dd.Order))*/
+	// Debug order end
 
 	c, ok := t.connMap.Load(remotePID)
 	if ok {
