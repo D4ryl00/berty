@@ -547,30 +547,45 @@ public class PeerDevice {
 
         Log.d(TAG, String.format("write: value is %s", Base64.getEncoder().encodeToString(payload)));
 
-        boolean result = BleQueue.add(new Runnable() {
-            @Override
-            public void run() {
-                Log.v(TAG, String.format("BleQueue: writing for device %s base64=%s value=%s", getMACAddress(), Base64.getEncoder().encodeToString(payload), BleDriver.bytesToHex(payload)));
-                if (isClient() && isConnected()) {
-                    if (!getWriterCharacteristic().setValue(payload) || !getBluetoothGatt().writeCharacteristic(getWriterCharacteristic())) {
-                        Log.e(TAG, String.format("writerCharacteristic failed for characteristic: %s", getWriterCharacteristic().getUuid()));
-                        BleQueue.completedCommand();
-                    } else {
-                        Log.d(TAG, String.format("writing characteristic %s", getWriterCharacteristic().getUuid()));
-                        //mNrTries++;
-                    }
-                } else {
-                    BleQueue.completedCommand();
-                }
-            }
-        });
+        int minOffset = 0;
+        int maxOffset;
 
-        if (result) {
-            BleQueue.nextCommand();
-        } else {
-            Log.e(TAG, "could not enqueue read characteristic command");
+        // Send data to fit with MTU value
+        while (true) {
+            maxOffset = minOffset + getMtu() - GattServer.ATT_HEADER_SIZE > payload.length ? payload.length : minOffset + getMtu() - GattServer.ATT_HEADER_SIZE;
+            final byte[] toWrite = Arrays.copyOfRange(payload, minOffset, maxOffset);
+            boolean result = BleQueue.add(new Runnable() {
+                @Override
+                public void run() {
+                    Log.v(TAG, String.format("BleQueue: writing for device %s base64=%s value=%s", getMACAddress(), Base64.getEncoder().encodeToString(payload), BleDriver.bytesToHex(payload)));
+                    if (isClient() && isConnected()) {
+                        if (!getWriterCharacteristic().setValue(toWrite) || !getBluetoothGatt().writeCharacteristic(getWriterCharacteristic())) {
+                            Log.e(TAG, String.format("writerCharacteristic failed for characteristic: %s", getWriterCharacteristic().getUuid()));
+                            BleQueue.completedCommand();
+                            return;
+                        } else {
+                            Log.d(TAG, String.format("writing characteristic %s", getWriterCharacteristic().getUuid()));
+                            //mNrTries++;
+                        }
+                    } else {
+                        BleQueue.completedCommand();
+                    }
+                }
+            });
+
+            if (result) {
+                BleQueue.nextCommand();
+            } else {
+                Log.e(TAG, "could not enqueue read characteristic command");
+                return false;
+            }
+
+            if (minOffset == payload.length) {
+                return true;
+            }
+
+            minOffset = maxOffset;
         }
-        return result;
     }
 
     private boolean requestMtu(final int mtu) {

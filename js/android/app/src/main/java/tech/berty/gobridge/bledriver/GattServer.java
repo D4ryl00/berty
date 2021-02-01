@@ -26,7 +26,8 @@ import static android.content.Context.BLUETOOTH_SERVICE;
 public class GattServer {
     private final String TAG = "bty.ble.GattServer";
 
-    private static final int ATT_HEADER_SIZE = 3;
+    // BLE protocol reserves 3 bytes out of MTU_SIZE for metadata
+    public static final int ATT_HEADER_SIZE = 3;
 
     // GATT service UUID
     static final UUID SERVICE_UUID = UUID.fromString("A06C6AB8-886F-4D56-82FC-2CF8610D668D");
