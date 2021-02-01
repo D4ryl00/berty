@@ -68,7 +68,8 @@ public class PeerDevice {
     private boolean mServerReady = false;
     private boolean mDiscoveryStarted = false;
 
-    private byte[] mBuffer;
+    private byte[] mClientBuffer;
+    private byte[] mServerBuffer;
 
     //private int mMtu = 0;
     // default MTU is 23
@@ -239,10 +240,6 @@ public class PeerDevice {
         return mWriterCharacteristic;
     }
 
-    public boolean setWriterValue(String value) {
-        return getWriterCharacteristic().setValue(value);
-    }
-
     public BluetoothGattService getBertyService() {
         return mBertyService;
     }
@@ -274,6 +271,20 @@ public class PeerDevice {
         synchronized (mLockPeer) {
             return mPeer;
         }
+    }
+
+    public byte[] getBuffer() {
+        if (isClient()) {
+            return mClientBuffer;
+        }
+        return mServerBuffer;
+    }
+
+    public void resetBuffer() {
+        if (isClient()) {
+            mClientBuffer = null;
+        }
+        mServerBuffer = null;
     }
 
     public void handleServerDataSent() {
@@ -539,7 +550,7 @@ public class PeerDevice {
         boolean result = BleQueue.add(new Runnable() {
             @Override
             public void run() {
-                Log.v(TAG, String.format("BleQueue: write for device %s", getMACAddress()));
+                Log.v(TAG, String.format("BleQueue: writing for device %s base64=%s value=%s", getMACAddress(), Base64.getEncoder().encodeToString(payload), BleDriver.bytesToHex(payload)));
                 if (isClient() && isConnected()) {
                     if (!getWriterCharacteristic().setValue(payload) || !getBluetoothGatt().writeCharacteristic(getWriterCharacteristic())) {
                         Log.e(TAG, String.format("writerCharacteristic failed for characteristic: %s", getWriterCharacteristic().getUuid()));
@@ -632,14 +643,28 @@ public class PeerDevice {
         disconnect();
     }
 
-    private void addToBuffer(byte[] value) {
-        if (mBuffer == null) {
-            mBuffer = new byte[0];
+    // PeerDevice can be only client or server, not both in the same time
+    public void addToBuffer(byte[] value) {
+        byte[] buffer;
+
+        if (isClient()) {
+            buffer = mClientBuffer;
+        } else {
+            buffer = mServerBuffer;
         }
-        byte[] tmp = new byte[mBuffer.length + value.length];
-        System.arraycopy(mBuffer, 0, tmp, 0, mBuffer.length);
-        System.arraycopy(value, 0, tmp, mBuffer.length, value.length);
-        mBuffer = tmp;
+
+        if (buffer == null) {
+            buffer = new byte[0];
+        }
+        byte[] tmp = new byte[buffer.length + value.length];
+        System.arraycopy(buffer, 0, tmp, 0, buffer.length);
+        System.arraycopy(value, 0, tmp, buffer.length, value.length);
+
+        if (isClient()) {
+            mClientBuffer = tmp;
+        } else {
+            mServerBuffer = tmp;
+        }
     }
 
     private BluetoothGattCallback mGattCallback =
@@ -782,11 +807,11 @@ public class PeerDevice {
                     byte[] copy;
 
                     byte[] value = characteristic.getValue();
-                    Log.d(TAG, String.format("onCharacteristicChanged: value=%s", Arrays.toString(value)));
+                    Log.d(TAG, String.format("onCharacteristicChanged: value=%s", BleDriver.bytesToHex(value)));
                     if (value.length == 0) { // end of transmission
-                        copy = new byte[mBuffer.length];
-                        System.arraycopy(mBuffer, 0, copy, 0, mBuffer.length);
-                        mBuffer = null;
+                        copy = new byte[mClientBuffer.length];
+                        System.arraycopy(mClientBuffer, 0, copy, 0, mClientBuffer.length);
+                        mClientBuffer = null;
                         handleClientDataReceived(copy);
                     } else { // transmission in progress
                         addToBuffer(value);

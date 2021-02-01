@@ -19,6 +19,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.concurrent.CountDownLatch;
@@ -31,6 +32,8 @@ public class BleDriver {
     private static volatile BleDriver mBleDriver;
 
     static final String ACTION_PEER_FOUND = "BleDriver.ACTION_PEER_FOUND";
+
+    private static final byte[] HEX_ARRAY = "0123456789ABCDEF".getBytes(StandardCharsets.US_ASCII);
 
     private static Context mAppContext;
     private static BluetoothManager mBluetoothManager;
@@ -191,5 +194,15 @@ public class BleDriver {
         } else {
             return mGattServer.writeAndNotify(peerDevice, payload);
         }
+    }
+
+    public static String bytesToHex(byte[] bytes) {
+        byte[] hexChars = new byte[bytes.length * 2];
+        for (int j = 0; j < bytes.length; j++) {
+            int v = bytes[j] & 0xFF;
+            hexChars[j * 2] = HEX_ARRAY[v >>> 4];
+            hexChars[j * 2 + 1] = HEX_ARRAY[v & 0x0F];
+        }
+        return new String(hexChars, StandardCharsets.UTF_8);
     }
 }

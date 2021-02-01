@@ -110,7 +110,7 @@ func (c *Conn) Write(payload []byte) (n int, err error) {
 	}
 
 	// Debug order
-	fmt.Printf("write bytes=%v count=%d", payload, c.count)
+	fmt.Printf("write bytes=%v count=%d\n", payload, c.count)
 	message := &MessageCount{
 		Count: c.count,
 		Data:  payload,
@@ -141,7 +141,7 @@ func (c *Conn) Write(payload []byte) (n int, err error) {
 	}
 	c.transport.logger.Debug("Conn.Write successful")
 
-	return len(data), nil
+	return len(payload), nil
 }
 
 // Close closes the connection.

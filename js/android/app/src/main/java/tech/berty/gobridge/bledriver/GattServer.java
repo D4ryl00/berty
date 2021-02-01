@@ -170,7 +170,7 @@ public class GattServer {
             return false;
         }
 
-        Log.d(TAG, String.format("writeAndNotify: value=%s length=%d mtu=%d ATT_HEADER_SIZE=%d", Arrays.toString(payload), payload.length, device.getMtu(), ATT_HEADER_SIZE));
+        Log.d(TAG, String.format("writeAndNotify: value=%s length=%d mtu=%d ATT_HEADER_SIZE=%d", BleDriver.bytesToHex(payload), payload.length, device.getMtu(), ATT_HEADER_SIZE));
 
         boolean result = BleQueue.add(new Runnable() {
             @Override
@@ -196,7 +196,7 @@ public class GattServer {
                             toWrite = Arrays.copyOfRange(payload, offset, payload.length - offset - device.getMtu());
                             offset =
                         }*/
-                        Log.d(TAG, String.format("BleQueue: writeAndNotify: chunk value=%s length=%d", Arrays.toString(toWrite), toWrite.length));
+                        Log.d(TAG, String.format("BleQueue: writeAndNotify: chunk value=%s length=%d", BleDriver.bytesToHex(toWrite), toWrite.length));
                         mReaderCharacteristic.setValue(toWrite);
                         if (!mBluetoothGattServer.notifyCharacteristicChanged(device.getBluetoothDevice(), mReaderCharacteristic, true)) {
                             Log.e(TAG, String.format("BleQueue: writeAndNotify: notifyCharacteristicChanged failed for device %s", device.getMACAddress()));
