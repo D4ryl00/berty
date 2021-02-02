@@ -162,19 +162,12 @@ public class GattServerCallback extends BluetoothGattServerCallback {
         } else {
             if (characteristic.getUuid().equals(GattServer.WRITER_UUID)) {
                 Log.d(TAG, String.format("onCharacteristicWriteRequest: device=%s value=%s base64=%s size=%d offset=%d preparedWrite=%b needResponse=%b", device.getAddress(), BleDriver.bytesToHex(value), Base64.getEncoder().encodeToString(value), value.length, offset, prepareWrite, responseNeeded));
-                if (value.length == 0) {
-                    status = peerDevice.handleServerDataReceived(peerDevice.getBuffer());
-                    peerDevice.resetBuffer();
-                } else {
+                if (prepareWrite) {
                     peerDevice.addToBuffer(value);
                     status = true;
+                } else {
+                    status = peerDevice.handleServerDataReceived(value);
                 }
-                /*if (prepareWrite) {
-                    peerDevice.addToBuffer(value);
-                    status = true;
-                } else {
-                    status = peerDevice.handleServerDataReceived(value); // TODO: copy value
-                }*/
             } else {
                 Log.e(TAG, "onCharacteristicWriteRequest: try to write to a wrong characteristic");
             }

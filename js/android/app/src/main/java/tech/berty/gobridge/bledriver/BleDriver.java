@@ -190,7 +190,7 @@ public class BleDriver {
         }
 
         if (peerDevice.isClient()) {
-            return peerDevice.write(payload);
+            return peerDevice.write(payload, false);
         } else {
             return mGattServer.writeAndNotify(peerDevice, payload);
         }

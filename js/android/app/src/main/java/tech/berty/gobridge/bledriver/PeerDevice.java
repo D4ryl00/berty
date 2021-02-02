@@ -30,6 +30,9 @@ import static android.bluetooth.BluetoothGatt.GATT_SUCCESS;
 public class PeerDevice {
     private static final String TAG = "bty.ble.PeerDevice";
 
+    // Mark used to tell all data is transferred
+    public static final String EOD = "EOD";
+
     // Minimal and default MTU
     private static final int DEFAULT_MTU = 23;
 
@@ -291,16 +294,10 @@ public class PeerDevice {
         Log.v(TAG, String.format("handleServerDataSent for device %s", getMACAddress()));
 
         if (!isClientReady()) {
-            if (getRemotePID() == null) {
-                Log.e(TAG, String.format("handleServerDataSent: remotePID is null for device %s", getMACAddress()));
-                return ;
-            }
-
-            setServerReady(true);
             setClientReady(true);
         } else {
             Log.e(TAG, String.format("handleServerDataSent: PID already sent for device %s", getMACAddress()));
-            close();
+            close(); // TODO: make better close + reconnect
         }
     }
 
@@ -310,22 +307,31 @@ public class PeerDevice {
         boolean status = false;
 
         if (!isServerReady()) {
-            Peer peer;
-            String remotePID = new String(payload);
+            Log.v(TAG, String.format("handleServerDataReceived: device=%s server not ready", getMACAddress()));
+            if (new String(payload).equals(EOD)) {
+                Log.v(TAG, String.format("handleServerDataReceived: device=%s EOD received", getMACAddress()));
+                Peer peer;
+                String remotePID = new String(getBuffer());
+                resetBuffer();
 
-            // check if a connection already exists
-            if ((peer = PeerManager.get(remotePID)) != null) {
-                Log.i(TAG, String.format("handleServerDataReceived: device=%s: a connection with the peer %s already exists with other device %s", getMACAddress(), remotePID, peer.getPeerDevice().getMACAddress()));
-                //disconnect();
-                return false;
+                // check if a connection already exists
+                if ((peer = PeerManager.get(remotePID)) != null) {
+                    Log.i(TAG, String.format("handleServerDataReceived: device=%s: a connection with the peer %s already exists with other device %s", getMACAddress(), remotePID, peer.getPeerDevice().getMACAddress()));
+                    //disconnect();
+                    return false;
+                }
+
+                setRemotePID(remotePID);
+                peer = PeerManager.register(remotePID, this);
+                setPeer(peer);
+                setServerReady(true);
+            } else {
+                Log.v(TAG, String.format("handleServerDataReceived: device=%s add data to buffer", getMACAddress()));
+                addToBuffer(payload);
             }
-
-            setRemotePID(remotePID);
-            peer = PeerManager.register(remotePID, this);
-            setPeer(peer);
             status = true;
         } else {
-            //BleInterface.BLEReceiveFromPeer(getRemotePID(), payload);
+            Log.v(TAG, String.format("handleServerDataReceived: device=%s server ready, data transfer", getMACAddress()));
             status = BleQueue.add(new Runnable() {
                 @Override
                 public void run() {
@@ -537,7 +543,36 @@ public class PeerDevice {
         return result;
     }
 
-    public boolean write(byte[] payload) {
+    private boolean internalWrite(byte[] payload) {
+        boolean result = BleQueue.add(new Runnable() {
+            @Override
+            public void run() {
+                Log.v(TAG, String.format("BleQueue: writing for device %s base64=%s value=%s", getMACAddress(), Base64.getEncoder().encodeToString(payload), BleDriver.bytesToHex(payload)));
+                if (isClient() && isConnected()) {
+                    if (!getWriterCharacteristic().setValue(payload) || !getBluetoothGatt().writeCharacteristic(getWriterCharacteristic())) {
+                        Log.e(TAG, String.format("writerCharacteristic failed for characteristic: %s", getWriterCharacteristic().getUuid()));
+                        BleQueue.completedCommand();
+                        return;
+                    } else {
+                        Log.d(TAG, String.format("writing characteristic %s", getWriterCharacteristic().getUuid()));
+                        //mNrTries++;
+                    }
+                } else {
+                    BleQueue.completedCommand();
+                }
+            }
+        });
+
+        if (result) {
+            BleQueue.nextCommand();
+        } else {
+            Log.e(TAG, "could not enqueue read characteristic command");
+            return false;
+        }
+        return true;
+    }
+
+    public boolean write(byte[] payload, boolean withEOD) {
         Log.v(TAG, String.format("write() called for device %s", getMACAddress()));
 
         if (!isClient() || !isConnected()) {
@@ -545,47 +580,27 @@ public class PeerDevice {
             return false;
         }
 
-        Log.d(TAG, String.format("write: value is %s", Base64.getEncoder().encodeToString(payload)));
+        Log.d(TAG, String.format("write: base64=%S value=%s", Base64.getEncoder().encodeToString(payload), BleDriver.bytesToHex(payload)));
 
         int minOffset = 0;
         int maxOffset;
 
         // Send data to fit with MTU value
-        while (true) {
+        while (minOffset != payload.length) {
             maxOffset = minOffset + getMtu() - GattServer.ATT_HEADER_SIZE > payload.length ? payload.length : minOffset + getMtu() - GattServer.ATT_HEADER_SIZE;
             final byte[] toWrite = Arrays.copyOfRange(payload, minOffset, maxOffset);
-            boolean result = BleQueue.add(new Runnable() {
-                @Override
-                public void run() {
-                    Log.v(TAG, String.format("BleQueue: writing for device %s base64=%s value=%s", getMACAddress(), Base64.getEncoder().encodeToString(payload), BleDriver.bytesToHex(payload)));
-                    if (isClient() && isConnected()) {
-                        if (!getWriterCharacteristic().setValue(toWrite) || !getBluetoothGatt().writeCharacteristic(getWriterCharacteristic())) {
-                            Log.e(TAG, String.format("writerCharacteristic failed for characteristic: %s", getWriterCharacteristic().getUuid()));
-                            BleQueue.completedCommand();
-                            return;
-                        } else {
-                            Log.d(TAG, String.format("writing characteristic %s", getWriterCharacteristic().getUuid()));
-                            //mNrTries++;
-                        }
-                    } else {
-                        BleQueue.completedCommand();
-                    }
-                }
-            });
-
-            if (result) {
-                BleQueue.nextCommand();
-            } else {
-                Log.e(TAG, "could not enqueue read characteristic command");
+            minOffset = maxOffset;
+            if (!internalWrite(toWrite)) {
+                Log.e(TAG, String.format("write payload failed: device=%s", getMACAddress()));
                 return false;
             }
-
-            if (minOffset == payload.length) {
-                return true;
-            }
-
-            minOffset = maxOffset;
         }
+
+        if (withEOD && !internalWrite(EOD.getBytes())) {
+            Log.e(TAG, String.format("write EOD failed: device=%s", getMACAddress()));
+                return false;
+        }
+        return true;
     }
 
     private boolean requestMtu(final int mtu) {
@@ -641,7 +656,7 @@ public class PeerDevice {
                 requestMtu(MAX_MTU);
 
                 // send local PID
-                if (!write(mLocalPID.getBytes())) {
+                if (!write(mLocalPID.getBytes(), true)) {
                     Log.e(TAG, String.format("handshake: fail to send local PID for device %s", getMACAddress()));
                     disconnect();
                 }
@@ -810,7 +825,7 @@ public class PeerDevice {
                         return ;
                     }
 
-                    mMtu = mtu;
+                    setMtu(mtu);
                     BleQueue.completedCommand();
                 }
 
