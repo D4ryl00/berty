@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/golang/protobuf/proto"
 	host "github.com/libp2p/go-libp2p-core/host"
 	peer "github.com/libp2p/go-libp2p-core/peer"
 	pstore "github.com/libp2p/go-libp2p-core/peerstore"
@@ -161,7 +160,7 @@ func (t *proximityTransport) ReceiveFromPeer(remotePID string, payload []byte) {
 	t.logger.Debug("ReceiveFromPeer()", zap.Binary("value", value))
 	fmt.Println("ReceiveFromPeer", base64.StdEncoding.EncodeToString(value), value)
 
-	// Debug order
+	/*// Debug order
 	message := &MessageCount{}
 	err := proto.Unmarshal(value, message)
 	if err != nil {
@@ -172,7 +171,8 @@ func (t *proximityTransport) ReceiveFromPeer(remotePID string, payload []byte) {
 	data := make([]byte, len(message.Data))
 	copy(data, message.Data)
 	t.logger.Debug("ReceiveFromPeer", zap.Binary("new payload", data), zap.Uint64("count", message.Count))
-	// Debug order end
+	// Debug order end*/
+	data := value
 
 	c, ok := t.connMap.Load(remotePID)
 	if ok {

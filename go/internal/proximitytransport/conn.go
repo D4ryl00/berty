@@ -2,14 +2,12 @@ package proximitytransport
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
 	"io"
 	"net"
 	"sync"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	peer "github.com/libp2p/go-libp2p-core/peer"
 	tpt "github.com/libp2p/go-libp2p-core/transport"
 	ma "github.com/multiformats/go-multiaddr"
@@ -109,7 +107,7 @@ func (c *Conn) Write(payload []byte) (n int, err error) {
 		return 0, fmt.Errorf("error: Conn.Write failed: conn already closed")
 	}
 
-	// Debug order
+	/*// Debug order
 	fmt.Printf("write bytes=%v count=%d\n", payload, c.count)
 	message := &MessageCount{
 		Count: c.count,
@@ -123,7 +121,8 @@ func (c *Conn) Write(payload []byte) (n int, err error) {
 	c.count = c.count + 1
 	c.transport.logger.Debug("Write", zap.Binary("new payload", data))
 	fmt.Println("write after Marshal", base64.StdEncoding.EncodeToString(data), data)
-	// Debug order end
+	// Debug order end*/
+	data := payload
 
 	// Set connection as ready and flush cached payloads
 	if !c.isReady() {
