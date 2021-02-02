@@ -154,25 +154,11 @@ func (t *proximityTransport) ReceiveFromPeer(remotePID string, payload []byte) {
 	t.logger.Debug("ReceiveFromPeer()", zap.String("remotePID", remotePID), zap.Binary("payload", payload))
 
 	// copy value from driver
-	value := make([]byte, len(payload))
-	copy(value, payload)
+	data := make([]byte, len(payload))
+	copy(data, payload)
 
-	t.logger.Debug("ReceiveFromPeer()", zap.Binary("value", value))
-	fmt.Println("ReceiveFromPeer", base64.StdEncoding.EncodeToString(value), value)
-
-	/*// Debug order
-	message := &MessageCount{}
-	err := proto.Unmarshal(value, message)
-	if err != nil {
-		t.logger.Error("ReceiveFromPeer protobuf Unmarshal error")
-		return
-	}
-	//payload = dd.Data
-	data := make([]byte, len(message.Data))
-	copy(data, message.Data)
-	t.logger.Debug("ReceiveFromPeer", zap.Binary("new payload", data), zap.Uint64("count", message.Count))
-	// Debug order end*/
-	data := value
+	t.logger.Debug("ReceiveFromPeer()", zap.Binary("data", data))
+	fmt.Println("ReceiveFromPeer", base64.StdEncoding.EncodeToString(data), data)
 
 	c, ok := t.connMap.Load(remotePID)
 	if ok {

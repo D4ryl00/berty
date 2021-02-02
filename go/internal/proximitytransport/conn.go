@@ -107,23 +107,6 @@ func (c *Conn) Write(payload []byte) (n int, err error) {
 		return 0, fmt.Errorf("error: Conn.Write failed: conn already closed")
 	}
 
-	/*// Debug order
-	fmt.Printf("write bytes=%v count=%d\n", payload, c.count)
-	message := &MessageCount{
-		Count: c.count,
-		Data:  payload,
-	}
-	data, err := proto.Marshal(message)
-	if err != nil {
-		c.transport.logger.Error("Conn.Write: protobuf Marshal error")
-		return 0, err
-	}
-	c.count = c.count + 1
-	c.transport.logger.Debug("Write", zap.Binary("new payload", data))
-	fmt.Println("write after Marshal", base64.StdEncoding.EncodeToString(data), data)
-	// Debug order end*/
-	data := payload
-
 	// Set connection as ready and flush cached payloads
 	if !c.isReady() {
 		c.Lock()
@@ -134,7 +117,7 @@ func (c *Conn) Write(payload []byte) (n int, err error) {
 	}
 
 	// Write to the peer's device using native driver.
-	if !c.transport.driver.SendToPeer(c.RemoteAddr().String(), data) {
+	if !c.transport.driver.SendToPeer(c.RemoteAddr().String(), payload) {
 		c.transport.logger.Debug("Conn.Write failed")
 		return 0, fmt.Errorf("error: Conn.Write failed: native write failed")
 	}
