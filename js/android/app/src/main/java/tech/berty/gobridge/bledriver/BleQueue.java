@@ -2,6 +2,7 @@ package tech.berty.gobridge.bledriver;
 
 import android.util.Log;
 
+import java.util.Base64;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
@@ -19,7 +20,15 @@ public class BleQueue {
 
 
     public synchronized static boolean add(Runnable task) {
-        return mCommandQueue.add(task);
+        boolean result = mCommandQueue.add(task);
+
+        if (result) {
+            BleQueue.nextCommand();
+        } else {
+            Log.e(TAG, "could not enqueue task command");
+            return false;
+        }
+        return true;
     }
 
     /**

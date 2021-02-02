@@ -159,7 +159,7 @@ public class PeerDevice {
         BleQueue.clear();
         setClientReady(false);
         setServerReady(false);
-        setPeer(null);
+        //setPeer(null);
         PeerManager.unregister(mRemotePID);
     }
 
@@ -307,7 +307,6 @@ public class PeerDevice {
         boolean status = false;
 
         if (!isServerReady()) {
-            Log.v(TAG, String.format("handleServerDataReceived: device=%s server not ready", getMACAddress()));
             if (new String(payload).equals(EOD)) {
                 Log.v(TAG, String.format("handleServerDataReceived: device=%s EOD received", getMACAddress()));
                 Peer peer;
@@ -317,8 +316,8 @@ public class PeerDevice {
                 // check if a connection already exists
                 if ((peer = PeerManager.get(remotePID)) != null) {
                     Log.i(TAG, String.format("handleServerDataReceived: device=%s: a connection with the peer %s already exists with other device %s", getMACAddress(), remotePID, peer.getPeerDevice().getMACAddress()));
-                    //disconnect();
-                    return false;
+                    // do nothing
+                    return true;
                 }
 
                 setRemotePID(remotePID);
@@ -340,11 +339,8 @@ public class PeerDevice {
                     BleQueue.completedCommand();
                 }
             });
-
-            if (status) {
-                BleQueue.nextCommand();
-            } else {
-                Log.e(TAG, "could not enqueue requestMtu command");
+            if (!status) {
+                disconnect();
             }
         }
         return status;
@@ -372,7 +368,6 @@ public class PeerDevice {
             setServerReady(true);
             //peer.CallFoundPeer();
         } else {
-            //BleInterface.BLEReceiveFromPeer(getRemotePID(), payload);
             boolean result = BleQueue.add(new Runnable() {
                 @Override
                 public void run() {
@@ -382,10 +377,9 @@ public class PeerDevice {
                 }
             });
 
-            if (result) {
-                BleQueue.nextCommand();
-            } else {
-                Log.e(TAG, "could not enqueue requestMtu command");
+            if (!result) {
+                Log.e(TAG, "could not enqueue requestMtu command, disconnecting");
+                disconnect();
             }
         }
     }
@@ -516,7 +510,7 @@ public class PeerDevice {
             return false;
         }
 
-        boolean result = BleQueue.add(new Runnable() {
+        return BleQueue.add(new Runnable() {
             @Override
             public void run() {
                 Log.v(TAG, String.format("BleQueue: read for device %s", getMACAddress()));
@@ -534,17 +528,10 @@ public class PeerDevice {
                 }
             }
         });
-
-        if (result) {
-            BleQueue.nextCommand();
-        } else {
-            Log.e(TAG, "could not enqueue read characteristic command");
-        }
-        return result;
     }
 
     private boolean internalWrite(byte[] payload) {
-        boolean result = BleQueue.add(new Runnable() {
+        return BleQueue.add(new Runnable() {
             @Override
             public void run() {
                 Log.v(TAG, String.format("BleQueue: writing for device %s base64=%s value=%s", getMACAddress(), Base64.getEncoder().encodeToString(payload), BleDriver.bytesToHex(payload)));
@@ -562,14 +549,6 @@ public class PeerDevice {
                 }
             }
         });
-
-        if (result) {
-            BleQueue.nextCommand();
-        } else {
-            Log.e(TAG, "could not enqueue read characteristic command");
-            return false;
-        }
-        return true;
     }
 
     public boolean write(byte[] payload, boolean withEOD) {
@@ -616,7 +595,7 @@ public class PeerDevice {
             return false;
         }
 
-        boolean result = BleQueue.add(new Runnable() {
+        return BleQueue.add(new Runnable() {
             @Override
             public void run() {
                 Log.v(TAG, String.format("BleQueue: requestMtu for device %s", getMACAddress()));
@@ -631,14 +610,6 @@ public class PeerDevice {
                 }
             }
         });
-
-        if (result) {
-            BleQueue.nextCommand();
-        } else {
-            Log.e(TAG, "could not enqueue requestMtu command");
-        }
-
-        return result;
     }
 
     public void setMtu(int mtu) {
@@ -726,7 +697,9 @@ public class PeerDevice {
                                         Log.d(TAG, String.format("discoverServices failed to start for device %s", device.getAddress()));
                                     }
                                 };
-                                BleDriver.mainHandler.postDelayed(discoverRunnable, delay);
+                                if (!BleQueue.add(discoverRunnable)) {
+                                    disconnect();
+                                }
                             } else if (bondState == BOND_BONDING) {
                                 // Bonding process in progress, let it complete
                                 Log.i(TAG, "waiting for bonding to complete");
@@ -768,6 +741,7 @@ public class PeerDevice {
 
                     Log.i(TAG, String.format("discovered %d services for '%s'", gatt.getServices().size(), mBluetoothDevice.getAddress()));
                     handshake();
+                    BleQueue.completedCommand();
                 }
 
                 @Override

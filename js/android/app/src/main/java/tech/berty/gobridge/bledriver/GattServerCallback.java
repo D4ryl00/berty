@@ -33,9 +33,12 @@ public class GattServerCallback extends BluetoothGattServerCallback {
         mDoneSignal = doneSignal;
     }
 
+    // setLocalPID is called by GattServer for initialization
     public void setLocalPID(String peerID) {
         mLocalPID = peerID;
     }
+
+    private String getLocalPID() { return mLocalPID; }
 
     // When this callback is called, we assume that the GATT server is ready up.
     // We can enable scanner and advertiser.
@@ -64,7 +67,7 @@ public class GattServerCallback extends BluetoothGattServerCallback {
 
                 if (peerDevice == null) {
                     Log.i(TAG, String.format("onConnectionStateChange(): connected with new device %s", device.getAddress()));
-                    peerDevice = new PeerDevice(mContext, device, mLocalPID);
+                    peerDevice = new PeerDevice(mContext, device, getLocalPID());
                     DeviceManager.addDevice(peerDevice);
                 }
 
@@ -78,9 +81,12 @@ public class GattServerCallback extends BluetoothGattServerCallback {
             } else {
                 Log.d(TAG, String.format("onConnectionStateChange: device %s disconnected", device.getAddress()));
                 if (peerDevice != null) {
+                    BleInterface.BLEHandleLostPeer(peerDevice.getRemotePID());
+
                     if (peerDevice.getServerState() == PeerDevice.CONNECTION_STATE.CONNECTED) {
-                        BleInterface.BLEHandleLostPeer(peerDevice.getRemotePID());
+                        peerDevice.close();
                     }
+
                     peerDevice.setServerState(PeerDevice.CONNECTION_STATE.DISCONNECTED);
                 }
             }
@@ -116,14 +122,13 @@ public class GattServerCallback extends BluetoothGattServerCallback {
             return ;
         }
         if (characteristic.getUuid().equals(GattServer.READER_UUID)) {
-            String peerID = characteristic.getStringValue(0);
-            if ((peerID.length() - offset) <= peerDevice.getMtu() - ATT_HEADER_READ_SIZE) {
-                Log.d(TAG, "onCharacteristicReadRequest: mtu is big enough (" + (peerID.length() - offset) + " bytes to read)");
+            if ((getLocalPID().length() - offset) <= peerDevice.getMtu() - ATT_HEADER_READ_SIZE) {
+                Log.d(TAG, "onCharacteristicReadRequest: mtu is big enough (" + (getLocalPID().length() - offset) + " bytes to read)");
                 full = true;
             } else {
-                Log.d(TAG, "onCharacteristicReadRequest: mtu is too small (" + (peerID.length() - offset) + " bytes to read)");
+                Log.d(TAG, "onCharacteristicReadRequest: mtu is too small (" + (getLocalPID().length() - offset) + " bytes to read)");
             }
-            value = Arrays.copyOfRange(peerID.getBytes(), offset, peerID.length());
+            value = Arrays.copyOfRange(getLocalPID().getBytes(), offset, getLocalPID().length());
             mGattServer.getGattServer().sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, offset, value);
             if (full) {
                 Log.d(TAG, "onCharacteristicReadRequest: finished");
