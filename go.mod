@@ -113,7 +113,7 @@ require (
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 	gopkg.in/square/go-jose.v2 v2.5.1
 	gorm.io/driver/sqlite v1.1.4
-	gorm.io/gorm v1.21.6
+	gorm.io/gorm v1.21.9
 	moul.io/godev v1.7.0
 	moul.io/openfiles v1.2.0
 	moul.io/progress v1.3.2
@@ -122,7 +122,7 @@ require (
 	moul.io/u v1.20.0
 	moul.io/zapconfig v1.3.0
 	moul.io/zapfilter v1.6.1
-	moul.io/zapgorm2 v1.0.2
+	moul.io/zapgorm2 v1.1.0
 	moul.io/zapring v1.3.0
 	mvdan.cc/gofumpt v0.1.1
 	nhooyr.io/websocket v1.8.6 // indirect
