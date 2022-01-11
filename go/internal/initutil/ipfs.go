@@ -545,6 +545,8 @@ func (m *Manager) setupIPFSConfig(cfg *ipfs_cfg.Config) ([]libp2p.Option, error)
 		cfg.Peering.Peers = append(cfg.Peering.Peers, *p)
 	}
 
+	cfg.Addresses.Swarm = []string{}
+
 	return p2popts, nil
 }
 
