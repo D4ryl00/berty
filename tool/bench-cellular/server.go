@@ -3,12 +3,24 @@ package main
 import (
 	"bufio"
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"fmt"
 	"io/ioutil"
 	"log"
-	"math/rand"
 	"strconv"
 
+	ds "github.com/ipfs/go-datastore"
+	ipfs_ds "github.com/ipfs/go-datastore"
+	ds_sync "github.com/ipfs/go-datastore/sync"
+	ipfs_cfg "github.com/ipfs/go-ipfs-config"
+	"github.com/ipfs/go-ipfs/core"
+	ipfs_p2p "github.com/ipfs/go-ipfs/core/node/libp2p"
+	ipfs_repo "github.com/ipfs/go-ipfs/repo"
+
+	ci "github.com/libp2p/go-libp2p-core/crypto"
+
+	// "github.com/ipfs/go-ipfs/core"
 	"github.com/libp2p/go-libp2p"
 	ma "github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr/net"
@@ -21,7 +33,7 @@ import (
 
 var tcpBertyRelays = []string{
 	"/ip4/51.159.21.214/tcp/4040/p2p/QmdT7AmhhnbuwvCpa5PH1ySK9HJVB82jr3fo1bxMxBPW6p",
-	"/ip4/51.15.25.224/tcp/4040/p2p/12D3KooWHhDBv6DJJ4XDWjzEXq6sVNEs6VuxsV1WyBBEhPENHzcZ",
+	// "/ip4/51.15.25.224/tcp/4040/p2p/12D3KooWHhDBv6DJJ4XDWjzEXq6sVNEs6VuxsV1WyBBEhPENHzcZ",
 }
 
 var quicBertyRelays = []string{
@@ -81,7 +93,9 @@ func createServerHost(ctx context.Context, gOpts *globalOpts, sOpts *serverOpts)
 		opts = append(opts, libp2p.NATPortMap()) // Open port on NAT for access through public IP
 		opts = append(opts, libp2p.DisableRelay())
 	} else {
-		opts = append(opts, libp2p.ListenAddrs()) // If using relay, set no listener
+		fmt.Println("forcing manual listening on 4001")
+		opts = append(opts, libp2p.ListenAddrStrings("/ip4/0.0.0.0/tcp/4001"))
+		// opts = append(opts, libp2p.ListenAddrs()) // If using relay, set no listener
 		opts = append(opts, libp2p.EnableAutoRelay())
 		opts = append(opts, libp2p.ForceReachabilityPrivate())
 	}
@@ -141,7 +155,7 @@ func printHint(h host.Host, gOpts *globalOpts, sOpts *serverOpts) {
 	if sOpts.relay == disabledRelayMode {
 		log.Print("Waiting for public address...")
 	} else {
-		log.Print("Waiting for relay address...")
+		log.Print("Waiting for relay address... pid=", h.ID().Pretty())
 	}
 
 	eventReceiver, err := h.EventBus().Subscribe(new(event.EvtLocalAddressesUpdated))
@@ -212,11 +226,71 @@ func printHint(h host.Host, gOpts *globalOpts, sOpts *serverOpts) {
 	}
 }
 
+func genIpfsHostWithDHT(ctx context.Context) (host.Host, error) {
+	dsync := ds_sync.MutexWrap(ds.NewMapDatastore())
+	repo, err := createDefaultMockedRepo(dsync)
+	if err != nil {
+		return nil, err
+	}
+
+	nodeOptions := &core.BuildCfg{
+		Online:  true,
+		Routing: ipfs_p2p.DHTServerOption,
+		// Routing: ipfs_p2p.DHTClientOption, // This option sets the node to be a client DHT node (only fetching records)
+		Repo: repo,
+	}
+
+	node, err := core.NewNode(ctx, nodeOptions)
+	if err != nil {
+		return nil, err
+	}
+
+	return node.PeerHost, nil
+}
+
+func createDefaultMockedRepo(dstore ipfs_ds.Batching) (ipfs_repo.Repo, error) {
+	c := ipfs_cfg.Config{}
+	priv, pub, err := ci.GenerateKeyPairWithReader(ci.RSA, 2048, rand.Reader)
+	if err != nil {
+		return nil, err
+	}
+
+	pid, err := peer.IDFromPublicKey(pub)
+	if err != nil {
+		return nil, err
+	}
+
+	privkeyb, err := ci.MarshalPrivateKey(priv)
+	if err != nil {
+		return nil, err
+	}
+
+	c.Bootstrap = ipfs_cfg.DefaultBootstrapAddresses
+	// c.Bootstrap = []string{} // @NOTE(gfanton): if we remove bootstrap peer the test works
+
+	c.AutoNAT.ServiceMode = ipfs_cfg.AutoNATServiceDisabled
+	c.Addresses.Swarm = []string{"/ip4/0.0.0.0/tcp/4001", "/ip4/0.0.0.0/udp/4001/quic"}
+	c.Identity.PeerID = pid.Pretty()
+	c.Identity.PrivKey = base64.StdEncoding.EncodeToString(privkeyb)
+
+	return &ipfs_repo.Mock{
+		D: dstore,
+		C: c,
+	}, nil
+}
+
 func runServer(ctx context.Context, gOpts *globalOpts, sOpts *serverOpts) error {
-	h, err := createServerHost(ctx, gOpts, sOpts)
+	h, err := genIpfsHostWithDHT(ctx)
+	// h, err := createServerHost(ctx, gOpts, sOpts)
 	if err != nil {
 		return fmt.Errorf("server host creation failed: %v", err)
 	}
+
+	pirelay, err := peer.AddrInfoFromP2pAddr(ma.StringCast(tcpBertyRelays[0]))
+	if err != nil {
+		return fmt.Errorf("relay address is incorrect: %v", err)
+	}
+	h.Connect(ctx, *pirelay)
 
 	go printHint(h, gOpts, sOpts)
 

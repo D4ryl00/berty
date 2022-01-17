@@ -6,3 +6,6 @@ bench: $(SRCS)
 
 help: bench
 	./bench -h
+
+clean:
+	rm bench

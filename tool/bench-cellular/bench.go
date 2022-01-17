@@ -25,7 +25,7 @@ import (
 	p2pping "github.com/libp2p/go-libp2p/p2p/protocol/ping"
 	tcpt "github.com/libp2p/go-tcp-transport"
 
-	golog "github.com/ipfs/go-log"
+	golog "github.com/ipfs/go-log/v2"
 	ma "github.com/multiformats/go-multiaddr"
 	"github.com/peterbourgon/ff/v3/ffcli"
 )
@@ -208,6 +208,7 @@ func main() {
 					golog.SetLogLevel("swarm2", "debug")
 				}
 				if gOpts.veryVerbose {
+					golog.SetDebugLogging()
 					golog.SetAllLoggers(golog.LevelDebug)
 				}
 
@@ -268,6 +269,7 @@ func main() {
 					golog.SetLogLevel("swarm2", "debug")
 				}
 				if gOpts.veryVerbose {
+					golog.SetDebugLogging()
 					golog.SetAllLoggers(golog.LevelDebug)
 				}
 
