@@ -32,7 +32,8 @@ import (
 )
 
 var tcpBertyRelays = []string{
-	"/ip4/51.159.21.214/tcp/4040/p2p/QmdT7AmhhnbuwvCpa5PH1ySK9HJVB82jr3fo1bxMxBPW6p",
+	"/ip4/51.159.34.32/tcp/4040/p2p/12D3KooWAZFU1prmzkpa1Cg1GCS34wc1KRNzQQ8XEKrmj7CebPDK",
+	// "/ip4/51.159.21.214/tcp/4040/p2p/QmdT7AmhhnbuwvCpa5PH1ySK9HJVB82jr3fo1bxMxBPW6p",
 	// "/ip4/51.15.25.224/tcp/4040/p2p/12D3KooWHhDBv6DJJ4XDWjzEXq6sVNEs6VuxsV1WyBBEhPENHzcZ",
 }
 
