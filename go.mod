@@ -51,7 +51,7 @@ require (
 	github.com/ipfs/go-ipfs-files v0.0.9
 	github.com/ipfs/go-ipfs-keystore v0.0.2
 	github.com/ipfs/go-ipld-cbor v0.0.5
-	github.com/ipfs/go-log/v2 v2.3.1-0.20210928212129-b7a50af7847a
+	github.com/ipfs/go-log/v2 v2.5.0
 	github.com/ipfs/go-merkledag v0.4.1 // indirect
 	github.com/ipfs/interface-go-ipfs-core v0.5.2
 	github.com/ipld/go-ipld-prime v0.12.3 // indirect
@@ -61,11 +61,11 @@ require (
 	github.com/kr/pretty v0.3.0
 	github.com/libp2p/go-libp2p v0.15.1
 	github.com/libp2p/go-libp2p-circuit v0.4.0
-	github.com/libp2p/go-libp2p-core v0.11.0
+	github.com/libp2p/go-libp2p-core v0.14.0
 	github.com/libp2p/go-libp2p-discovery v0.5.1
 	github.com/libp2p/go-libp2p-kad-dht v0.14.0
 	github.com/libp2p/go-libp2p-pubsub v0.5.6
-	github.com/libp2p/go-libp2p-quic-transport v0.12.0
+	github.com/libp2p/go-libp2p-quic-transport v0.16.0
 	github.com/libp2p/go-libp2p-record v0.1.3
 	github.com/libp2p/go-libp2p-rendezvous v0.0.0-20180418151804-b7dd840ce441
 	github.com/libp2p/go-libp2p-transport-upgrader v0.4.6
@@ -100,9 +100,9 @@ require (
 	github.com/tj/assert v0.0.3
 	github.com/whyrusleeping/cbor-gen v0.0.0-20210713220151-be142a5ae1a8 // indirect
 	github.com/zcalusic/sysinfo v0.0.0-20200820110305-ef1bb2697bc2
-	go.uber.org/goleak v1.1.11-0.20210813005559-691160354723
+	go.uber.org/goleak v1.1.11
 	go.uber.org/multierr v1.7.0
-	go.uber.org/zap v1.19.1
+	go.uber.org/zap v1.20.0
 	golang.org/x/crypto v0.0.0-20210921155107-089bfa567519
 	golang.org/x/mobile v0.0.0-20210220033013-bdb1ca9a1e08
 	golang.org/x/net v0.0.0-20210813160813-60bc85c4be6d
@@ -121,7 +121,7 @@ require (
 	moul.io/testman v1.5.0
 	moul.io/u v1.27.0
 	moul.io/zapconfig v1.4.0
-	moul.io/zapfilter v1.6.1
+	moul.io/zapfilter v1.7.0
 	moul.io/zapgorm2 v1.1.1
 	moul.io/zapring v1.3.3
 	mvdan.cc/gofumpt v0.1.1
