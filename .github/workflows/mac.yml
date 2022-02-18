@@ -47,7 +47,7 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
       - name: Cache Node.js modules
-        uses: actions/cache@v2.1.6
+        uses: actions/cache@v2.1.7
         with:
           path: js/node_modules
           key:          ${{ runner.OS }}-node-${{ matrix.node }}-${{ secrets.CACHE_VERSION }}-${{ hashFiles('js/yarn.lock') }}-${{ hashFiles('js/electron-app/yarn.lock') }}
@@ -57,7 +57,7 @@ jobs:
         with:
           go-version: ${{ matrix.golang }}
       - name: Cache Go modules
-        uses: actions/cache@v2.1.6
+        uses: actions/cache@v2.1.7
         with:
           path: ~/go/pkg/mod
           key:          ${{ runner.os }}-go-${{ matrix.golang }}-${{ secrets.CACHE_VERSION }}-${{ hashFiles('**/go.sum') }}
