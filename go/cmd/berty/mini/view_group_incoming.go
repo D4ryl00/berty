@@ -336,6 +336,10 @@ func groupMonitorEventHandler(logger *zap.Logger, v *groupView, e *protocoltypes
 		} else {
 			payload = fmt.Sprintf("grabbed a peer <%.15s> ", peerfound.GetPeerID())
 		}
+	case protocoltypes.TypeEventMonitorMessageCache:
+		messageCache := e.GetMessageCache()
+		devicePK := messageCache.GetDevicePK()
+		payload = fmt.Sprintf("Failed to open message from=%s, no secret found. Putting message in cache.", devicePK)
 	default:
 		logger.Warn("unknow monitor event received")
 		return

@@ -888,6 +888,14 @@ message GroupMessageEvent {
   bytes message = 3;
 }
 
+message GroupMessageCacheEvent {
+  // group_pk receiving the event
+  bytes group_pk = 1[(gogoproto.customname) = "GroupPK"];
+
+  // device_pk is the public key of the device sending the message
+  bytes device_pk = 2 [(gogoproto.customname) = "DevicePK"];
+}
+
 message GroupMetadataList {
   message Request {
     // group_pk is the identifier of the group
@@ -995,6 +1003,7 @@ message MonitorGroup {
     TypeEventMonitorPeerFound = 2;
     TypeEventMonitorPeerJoin = 3;
     TypeEventMonitorPeerLeave = 4;
+    TypeEventMonitorMessageCache = 5;
   }
 
   message EventMonitorAdvertiseGroup {
@@ -1039,6 +1048,11 @@ message MonitorGroup {
     bool is_self = 4;
   }
 
+  message EventMonitorMessageCache {
+    // device_pk is the public key of the device sending the message
+    bytes device_pk = 1 [(gogoproto.customname) = "DevicePK"];
+  }
+
   message EventMonitor {
     TypeEventMonitor type = 1;
 
@@ -1046,6 +1060,7 @@ message MonitorGroup {
     EventMonitorPeerFound peer_found = 3;
     EventMonitorPeerJoin peer_join = 4;
     EventMonitorPeerLeave peer_leave = 5;
+    EventMonitorMessageCache message_cache = 6;
   }
 
   message Request {

@@ -202,7 +202,10 @@ func (m *MessageStore) processMessageLoop(ctx context.Context) {
 
 		if !device.hasSecret {
 			device.queue.Add(message)
-			_ = m.emitters.groupCacheMessage.Emit(*message)
+			_ = m.emitters.groupCacheMessage.Emit(protocoltypes.GroupMessageCacheEvent{
+				GroupPK:  m.g.PublicKey,
+				DevicePK: message.headers.DevicePK,
+			})
 		} else {
 			go func() {
 				// wait for a process slot
@@ -422,7 +425,7 @@ func constructorFactoryGroupMessage(s *BertyOrbitDB, logger *zap.Logger) iface.S
 		}
 
 		// for debug/test purpose
-		if store.emitters.groupCacheMessage, err = store.eventBus.Emitter(new(messageCacheItem)); err != nil {
+		if store.emitters.groupCacheMessage, err = store.eventBus.Emitter(new(protocoltypes.GroupMessageCacheEvent)); err != nil {
 			return nil, errcode.ErrOrbitDBInit.Wrap(err)
 		}
 

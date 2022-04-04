@@ -107,6 +107,7 @@ func (s *service) MonitorGroup(req *protocoltypes.MonitorGroup_Request, srv prot
 	sub, err := s.host.EventBus().Subscribe([]interface{}{
 		new(ipfsutil.EvtPubSubTopic),
 		new(tinder.EvtDriverMonitor),
+		new(protocoltypes.GroupMessageCacheEvent),
 	})
 	if err != nil {
 		return errors.Wrap(err, "unable to subscribe pubsub topic event")
@@ -148,6 +149,13 @@ func (s *service) MonitorGroup(req *protocoltypes.MonitorGroup_Request, srv prot
 
 			cachedFoundPeers[e.AddrInfo.ID] = newMS
 			monitorEvent = monitorHandleDiscoveryEvent(&e, s.host)
+		case protocoltypes.GroupMessageCacheEvent:
+			monitorEvent = &protocoltypes.MonitorGroup_EventMonitor{
+				Type: protocoltypes.TypeEventMonitorMessageCache,
+				MessageCache: &protocoltypes.MonitorGroup_EventMonitorMessageCache{
+					DevicePK: e.DevicePK,
+				},
+			}
 		default:
 			monitorEvent = &protocoltypes.MonitorGroup_EventMonitor{
 				Type: protocoltypes.TypeEventMonitorUndefined,
