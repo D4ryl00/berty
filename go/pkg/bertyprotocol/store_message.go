@@ -201,6 +201,7 @@ func (m *MessageStore) processMessageLoop(ctx context.Context) {
 		}
 
 		if !device.hasSecret {
+			m.logger.Warn("secrets not found, adding envelope to cache for later process")
 			device.queue.Add(message)
 			_ = m.emitters.groupCacheMessage.Emit(protocoltypes.GroupMessageCacheEvent{
 				GroupPK:  m.g.PublicKey,
@@ -221,7 +222,10 @@ func (m *MessageStore) processMessageLoop(ctx context.Context) {
 
 						// if failed to decrypt add to queue, for later process
 						device.queue.Add(message)
-						_ = m.emitters.groupCacheMessage.Emit(*message)
+						_ = m.emitters.groupCacheMessage.Emit(protocoltypes.GroupMessageCacheEvent{
+							GroupPK:  m.g.PublicKey,
+							DevicePK: message.headers.DevicePK,
+						})
 					} else {
 						m.logger.Error("unable to prcess message", zap.Error(err))
 					}
