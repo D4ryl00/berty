@@ -632,6 +632,12 @@ func (svc *service) sendAccountUserInfo(ctx context.Context, groupPK string) (er
 		})...)
 	}
 
+	// return if there is no user info
+	if acc.GetDisplayName() == "" && avatarCID == "" {
+		endSection(nil, "Sending account info aborted: no user info")
+		return nil
+	}
+
 	am, err := mt.AppMessage_TypeSetUserInfo.MarshalPayload(
 		messengerutil.TimestampMs(time.Now()),
 		"",
