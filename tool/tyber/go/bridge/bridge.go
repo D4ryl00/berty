@@ -29,6 +29,7 @@ type Bridge struct {
 	initLock        sync.RWMutex
 	websocketBridge WebsocketBridge
 	receiver        *func(string, []byte) error
+	eventChan       chan interface{}
 }
 
 // WebsocketBridge ...
@@ -76,7 +77,7 @@ func (b *Bridge) Init(a *astilectron.Astilectron, ws []*astilectron.Window, m *a
 	b.initLock.Unlock()
 
 	go func() {
-		for event := range b.parser.EventChan {
+		for event := range b.eventChan {
 			if b.websocketBridge != nil {
 				eventBytes, err := json.Marshal(event)
 				if err == nil {
