@@ -26,9 +26,10 @@ type Manager struct {
 
 func New(ctx context.Context, l *logger.Logger) *Manager {
 	return &Manager{
-		ctx:      ctx,
-		logger:   l,
-		sessions: orderedmap.New(),
+		ctx:       ctx,
+		logger:    l,
+		sessions:  orderedmap.New(),
+		EventChan: make(chan interface{}),
 	}
 }
 
@@ -55,7 +56,7 @@ func (m *Manager) Init(sessionPath string) error {
 		m.logger.Debugf("session %s restored successfully", sessionID)
 
 		m.sessions.Set(sessionID, s)
-		events = append(events, sessionToCreateEvent(s))
+		events = append(events, SessionToCreateEvent(s))
 	}
 
 	elapsed := time.Since(start)
@@ -86,6 +87,8 @@ func (m *Manager) AddSession(s *Session) error {
 	if !m.isInitialized() {
 		return errors.New("Manager not initialized")
 	}
+
+	m.logger.Debugf("request save session %s logs from %s (%s)", s.ID, s.SrcType, s.SrcName)
 
 	m.sessionsLock.Lock()
 	m.sessions.Set(s.ID, s)
@@ -122,21 +125,14 @@ func (m *Manager) OpenSession(sessionID string) error {
 	s := v.(*Session)
 	m.sessionsLock.Lock()
 	if m.openedSession != nil && m.openedSession.ID != s.ID && m.openedSession.isRunning() {
-		m.openedSession.TracesLock.Lock()
-		m.openedSession.Openned = false
-		m.openedSession.TracesLock.Unlock()
+		m.openedSession.SetOpenned(false)
 	}
 	m.openedSession = s
 	m.sessionsLock.Unlock()
 
-	var events []CreateTraceEvent
-	s.TracesLock.Lock()
-	s.Openned = true
-	for _, t := range s.Traces {
-		events = append(events, t.ToCreateTraceEvent())
-	}
-	m.EventChan <- events
-	s.TracesLock.Unlock()
+	s.SetOpenned(true)
+
+	m.EventChan <- s.GenerateCreateTraceEvents()
 
 	return nil
 }
@@ -147,7 +143,7 @@ func (m *Manager) ListSessions() {
 		m.sessionsLock.RLock()
 		for pair := m.sessions.Oldest(); pair != nil; {
 			s := pair.Value.(*Session)
-			events = append(events, sessionToCreateEvent(s))
+			events = append(events, SessionToCreateEvent(s))
 			pair = pair.Next()
 		}
 		m.sessionsLock.RUnlock()
@@ -162,9 +158,7 @@ func (m *Manager) DeleteSession(sessionID string) {
 	if m.isInitialized() {
 		m.sessionsLock.Lock()
 		if m.openedSession != nil && m.openedSession.ID == sessionID {
-			m.openedSession.TracesLock.Lock()
-			m.openedSession.Openned = false
-			m.openedSession.TracesLock.Unlock()
+			m.openedSession.SetOpenned(false)
 			m.openedSession = nil
 		}
 
@@ -173,7 +167,7 @@ func (m *Manager) DeleteSession(sessionID string) {
 			s := v.(*Session)
 
 			if s.isRunning() {
-				s.SrcCloser.Close()
+				s.SrcCloser().Close()
 			} else {
 				if err := m.deleteSessionFile(sessionID); err != nil {
 					m.logger.Errorf("deleting session %s file failed: %v", sessionID, err)
@@ -198,14 +192,12 @@ func (m *Manager) DeleteAllSessions() {
 			m.logger.Debugf("delete session requested: %s", s.ID)
 
 			if m.openedSession != nil && m.openedSession.ID == s.ID {
-				m.openedSession.TracesLock.Lock()
-				m.openedSession.Openned = false
-				m.openedSession.TracesLock.Unlock()
+				m.openedSession.SetOpenned(false)
 				m.openedSession = nil
 			}
 
 			if s.isRunning() {
-				s.SrcCloser.Close()
+				s.SrcCloser().Close()
 			} else {
 				if err := m.deleteSessionFile(s.ID); err != nil {
 					m.logger.Errorf("deleting session %s file failed: %v", s.ID, err)

@@ -9,15 +9,17 @@ import (
 	"berty.tech/berty/tool/tyber/go/config"
 	"berty.tech/berty/tool/tyber/go/logger"
 	"berty.tech/berty/tool/tyber/go/parser"
+	"berty.tech/berty/tool/tyber/go/session"
 )
 
 type Manager struct {
 	ctx    context.Context
 	cancel func()
 
-	Config   *config.Config
-	Parser   *parser.Parser
-	DataPath string
+	Config         *config.Config
+	SessionManager *session.Manager
+	Parser         *parser.Parser
+	DataPath       string
 
 	logger *logger.Logger
 }
@@ -35,7 +37,8 @@ func New(ctx context.Context, cancel func()) *Manager {
 
 func (m *Manager) Init() error {
 	m.Config = config.New(m.ctx, m.logger)
-	m.Parser = parser.New(m.ctx, m.logger)
+	m.SessionManager = session.New(m.ctx, m.logger)
+	m.Parser = parser.New(m.ctx, m.logger, m.SessionManager)
 
 	// init
 	if err := m.Config.Init(m.DataPath); err != nil {
@@ -52,7 +55,7 @@ func (m *Manager) Init() error {
 
 	cerr := make(chan error)
 	go func() {
-		if err = m.Parser.Init(sessionPath); err != nil {
+		if err = m.SessionManager.Init(sessionPath); err != nil {
 			m.logger.Errorf("parser init error: %v", err)
 			m.cancel()
 			cerr <- err
@@ -61,8 +64,8 @@ func (m *Manager) Init() error {
 	}()
 
 	select {
-	case evt := <-m.Parser.EventChan:
-		if _, ok := evt.([]parser.CreateSessionEvent); !ok {
+	case evt := <-m.SessionManager.EventChan:
+		if _, ok := evt.([]session.CreateSessionEvent); !ok {
 			m.cancel()
 			return errors.New("parser init: wrong event received")
 		}

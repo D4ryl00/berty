@@ -13,7 +13,7 @@ import (
 	"berty.tech/berty/tool/tyber/go/bind"
 	"berty.tech/berty/tool/tyber/go/bridge"
 	"berty.tech/berty/tool/tyber/go/cmd"
-	"berty.tech/berty/tool/tyber/go/parser"
+	"berty.tech/berty/tool/tyber/go/session"
 	"github.com/asticode/go-astikit"
 	"github.com/asticode/go-astilectron"
 	bootstrap "github.com/asticode/go-astilectron-bootstrap"
@@ -111,14 +111,14 @@ func list() *ffcli.Command {
 			}
 			defer manager.Cancel()
 
-			var sessions []parser.CreateSessionEvent
-			go manager.Parser.ListSessions()
+			var sessions []session.CreateSessionEvent
+			go manager.SessionManager.ListSessions()
 
 			// waiting parser returns the session list
 			select {
-			case evt := <-manager.Parser.EventChan:
+			case evt := <-manager.SessionManager.EventChan:
 				var ok bool
-				sessions, ok = evt.([]parser.CreateSessionEvent)
+				sessions, ok = evt.([]session.CreateSessionEvent)
 				if !ok {
 					return errors.New("list: wrong event received")
 				}
@@ -169,7 +169,7 @@ func parse() *ffcli.Command {
 					select {
 					case evt := <-manager.Parser.EventChan:
 						switch evt.(type) {
-						case parser.CreateSessionEvent:
+						case session.CreateSessionEvent:
 							break EVENT_LOOP
 						default: // digest unwanted events
 						}
@@ -207,12 +207,12 @@ func delete() *ffcli.Command {
 			defer manager.Cancel()
 
 			if *all {
-				go manager.Parser.DeleteAllSessions()
+				go manager.SessionManager.DeleteAllSessions()
 
 				// waiting parser deletes all sessions
 				select {
 				case evt := <-manager.Parser.EventChan:
-					if _, ok := evt.([]parser.CreateSessionEvent); !ok {
+					if _, ok := evt.([]session.CreateSessionEvent); !ok {
 						return errors.New("delete: wrong event received")
 					}
 				case <-ctx.Done():
@@ -223,13 +223,13 @@ func delete() *ffcli.Command {
 			}
 
 			for _, sessionID := range args {
-				go manager.Parser.DeleteSession(sessionID)
+				go manager.SessionManager.DeleteSession(sessionID)
 
 				// waiting parser deletes this session
 				select {
 				case evt := <-manager.Parser.EventChan:
 					var ok bool
-					_, ok = evt.(parser.DeleteSessionEvent)
+					_, ok = evt.(session.DeleteSessionEvent)
 					if !ok {
 						return errors.New("delete: wrong event received")
 					}

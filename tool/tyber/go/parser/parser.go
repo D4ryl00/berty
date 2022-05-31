@@ -17,13 +17,13 @@ import (
 type Parser struct {
 	ctx            context.Context
 	logger         *logger.Logger
-	sessionManager session.Manager
+	sessionManager *session.Manager
 	listener       *net.TCPListener
 	cancelNetwork  context.CancelFunc
 	EventChan      chan interface{} // TODO: base event definition
 }
 
-func New(ctx context.Context, l *logger.Logger, sessionManager session.Manager) *Parser {
+func New(ctx context.Context, l *logger.Logger, sessionManager *session.Manager) *Parser {
 	return &Parser{
 		ctx:            ctx,
 		logger:         l.Named("parser"),
@@ -131,5 +131,5 @@ func (p *Parser) startParsingSession(srcName string, srcType session.SrcType, sr
 	// 	<-wait
 	// }
 
-	p.EventChan <- sessionToCreateEvent(s)
+	p.EventChan <- session.SessionToCreateEvent(s)
 }

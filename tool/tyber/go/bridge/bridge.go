@@ -11,11 +11,13 @@ import (
 	"berty.tech/berty/tool/tyber/go/config"
 	"berty.tech/berty/tool/tyber/go/logger"
 	"berty.tech/berty/tool/tyber/go/parser"
+	"berty.tech/berty/tool/tyber/go/session"
 	"github.com/asticode/go-astilectron"
 )
 
 type Bridge struct {
 	logger          *logger.Logger
+	sessionManager  *session.Manager
 	parser          *parser.Parser
 	config          *config.Config
 	asti            *astilectron.Astilectron
@@ -47,7 +49,8 @@ func New(ctx context.Context, goLogger *log.Logger, w WebsocketBridge) *Bridge {
 	b.logger = baseLogger.Named("bridge")
 
 	b.config = config.New(ctx, baseLogger)
-	b.parser = parser.New(ctx, baseLogger)
+	b.sessionManager = session.New(ctx, baseLogger)
+	b.parser = parser.New(ctx, baseLogger, b.sessionManager)
 	receiver := b.HandleMessages
 	b.receiver = &receiver
 

@@ -27,7 +27,7 @@ type CreateSessionEvent struct {
 	Status
 }
 
-func sessionToCreateEvent(s *Session) CreateSessionEvent {
+func SessionToCreateEvent(s *Session) CreateSessionEvent {
 	return CreateSessionEvent{
 		ID:          s.ID,
 		DisplayName: s.DisplayName,
@@ -44,7 +44,7 @@ type UpdateSessionEvent struct {
 	Status
 }
 
-func sessionToUpdateEvent(s *Session) UpdateSessionEvent {
+func SessionToUpdateEvent(s *Session) UpdateSessionEvent {
 	return UpdateSessionEvent{
 		ID:          s.ID,
 		DisplayName: s.DisplayName,

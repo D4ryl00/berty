@@ -15,7 +15,7 @@ func (m *Manager) SaveSessionFile(sessionID string, path string) error {
 	m.sessionsLock.RUnlock()
 
 	if !ok {
-		return errors.New("ession ID not found")
+		return errors.New("session ID not found")
 	}
 
 	return m.saveSessionFile(session.(*Session), path)
@@ -38,6 +38,7 @@ func (m *Manager) restoreSessionFile(sessionID string, path string) (*Session, e
 		return nil, err
 	}
 
+	fmt.Println("content file", string(content))
 	if err = json.Unmarshal(content, &s); err != nil {
 		return nil, err
 	}

@@ -31,13 +31,9 @@ func (p *Parser) parseLogs(s *session.Session, srcScanner *bufio.Scanner) error 
 			}
 
 			trace := trl.ToAppTrace()
+			s.AddTrace(trace)
 
-			s.TracesLock.Lock()
-			s.Traces = append(s.Traces, trace)
-			s.RunningTraces[trace.ID] = trace
-			s.TracesLock.Unlock()
-
-			if s.Openned {
+			if s.IsOpenned() {
 				p.EventChan <- trace.ToCreateTraceEvent()
 			}
 
@@ -50,13 +46,12 @@ func (p *Parser) parseLogs(s *session.Session, srcScanner *bufio.Scanner) error 
 
 			step := sl.ToAppStep()
 
-			s.TracesLock.Lock()
-			parentTrace, ok := s.RunningTraces[sl.Step.ParentTraceID]
+			parentTrace, ok := s.GetRunningTrace(sl.Step.ParentTraceID)
 			if !ok && step.ForceReopen {
 				for _, t := range s.Traces {
 					if t.ID == sl.Step.ParentTraceID {
 						parentTrace = t
-						s.RunningTraces[t.ID] = t
+						s.SetRunningTrace(t.ID, t)
 						ok = true
 						break
 					}
@@ -65,7 +60,6 @@ func (p *Parser) parseLogs(s *session.Session, srcScanner *bufio.Scanner) error 
 
 			if !ok {
 				p.logger.Errorf("parent trace not found in running traces: %s", log)
-				s.TracesLock.Unlock()
 				continue
 			}
 
@@ -81,11 +75,10 @@ func (p *Parser) parseLogs(s *session.Session, srcScanner *bufio.Scanner) error 
 			if sl.Step.EndTrace {
 				parentTrace.Finished = step.Started
 				parentTrace.StatusType = step.StatusType
-				delete(s.RunningTraces, parentTrace.ID)
+				s.DeleteRunningTrace(parentTrace.ID)
 			}
-			s.TracesLock.Unlock()
 
-			if s.Openned {
+			if s.IsOpenned() {
 				cse := step.ToCreateStepEvent(parentTrace.ID)
 				p.EventChan <- cse
 				if sl.Step.EndTrace || shouldUpdateTraceName {
@@ -101,8 +94,7 @@ func (p *Parser) parseLogs(s *session.Session, srcScanner *bufio.Scanner) error 
 
 			subscribe := subl.ToAppSubscribe()
 
-			s.TracesLock.Lock()
-			parentTrace, ok := s.RunningTraces[subl.Subscribe.StepToAdd.ParentTraceID]
+			parentTrace, ok := s.GetRunningTrace(subl.Subscribe.StepToAdd.ParentTraceID)
 
 			if !ok {
 				p.logger.Errorf("parent trace not found in running traces: %s", log)
@@ -110,7 +102,6 @@ func (p *Parser) parseLogs(s *session.Session, srcScanner *bufio.Scanner) error 
 			}
 
 			parentTrace.Subs = append(parentTrace.Subs, session.SubTarget{TargetName: subscribe.TargetName, TargetDetails: subscribe.TargetDetails, StepToAdd: subl.Subscribe.StepToAdd})
-			s.TracesLock.Unlock()
 
 		case tyber.EventType:
 			el, err := parseEventLog(log)
@@ -120,7 +111,7 @@ func (p *Parser) parseLogs(s *session.Session, srcScanner *bufio.Scanner) error 
 			}
 
 			s.TracesLock.Lock()
-			for _, parentTrace := range s.RunningTraces {
+			for _, parentTrace := range s.runningTraces {
 				changed := false
 				for _, sub := range parentTrace.Subs {
 					if sub.TargetName == el.Message {
@@ -162,13 +153,13 @@ func (p *Parser) parseLogs(s *session.Session, srcScanner *bufio.Scanner) error 
 
 	if err := srcScanner.Err(); err != nil {
 		s.StatusType = tyber.Failed
-		p.EventChan <- sessionToUpdateEvent(s)
+		p.EventChan <- session.SessionToUpdateEvent(s)
 		// TODO: ADD ERROR TO ALL RUNNING TRACES
 		return errors.Wrap(err, "parsing traces failed")
 	}
 
 	s.StatusType = tyber.Succeeded
-	p.EventChan <- sessionToUpdateEvent(s)
+	p.EventChan <- session.SessionToUpdateEvent(s)
 
 	return nil
 }

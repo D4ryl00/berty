@@ -44,9 +44,9 @@ func (b *Bridge) HandleMessages(name string, payload []byte) error {
 			b.DisplayError("Session path config error", err.Error(), false)
 		}
 
-		if err = b.parser.Init(sessionPath); err != nil {
-			b.logger.Errorf("parser init error: %v", err)
-			b.DisplayError("Parser init error", err.Error(), true)
+		if err = b.sessionManager.Init(sessionPath); err != nil {
+			b.logger.Errorf("session manager init error: %v", err)
+			b.DisplayError("session manager init error", err.Error(), true)
 			return err
 		}
 
@@ -78,13 +78,13 @@ func (b *Bridge) HandleMessages(name string, payload []byte) error {
 		}
 		b.logger.Debugf("open_session payload is: %s", sessionID)
 
-		if err := b.parser.OpenSession(sessionID); err != nil {
+		if err := b.sessionManager.OpenSession(sessionID); err != nil {
 			b.logger.Errorf("opening session failed: %v", err)
 			// TODO: Display error instead of trace list in UI?
 		}
 
 	case "clear_sessions":
-		b.parser.DeleteAllSessions()
+		b.sessionManager.DeleteAllSessions()
 
 	case "toggle_devtools":
 		b.ToggleDevTools(astilectron.Event{})

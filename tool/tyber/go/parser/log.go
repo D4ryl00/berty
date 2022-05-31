@@ -36,19 +36,6 @@ func (p *Parser) parseTraceLog(log string) (*session.TraceLog, error) {
 	return tl, nil
 }
 
-func toAppTrace(tl *session.TraceLog) *AppTrace {
-	return &AppTrace{
-		ID:          tl.Trace.TraceID,
-		Name:        tl.Message,
-		InitialName: tl.Message,
-		Steps:       []*AppStep{},
-		Status: Status{
-			StatusType: tyber.Running,
-			Started:    tl.Time,
-		},
-	}
-}
-
 func parseStepLog(log string) (*session.StepLog, error) {
 	sl := &session.StepLog{}
 	if err := json.Unmarshal([]byte(log), sl); err != nil {
@@ -66,19 +53,6 @@ func parseStepLog(log string) (*session.StepLog, error) {
 	return sl, nil
 }
 
-func toAppStep(sl *session.StepLog) *AppStep {
-	return &AppStep{
-		Name:    sl.Message,
-		Details: sl.Step.Details,
-		Status: Status{
-			StatusType: sl.Step.Status,
-			Started:    sl.Time,
-		},
-		ForceReopen:     sl.Step.ForceReopen,
-		UpdateTraceName: sl.Step.UpdateTraceName,
-	}
-}
-
 func parseSubscribeLog(log string) (*session.SubscribeLog, error) {
 	sl := &session.SubscribeLog{}
 	if err := json.Unmarshal([]byte(log), sl); err != nil {
@@ -91,22 +65,6 @@ func parseSubscribeLog(log string) (*session.SubscribeLog, error) {
 	}
 
 	return sl, nil
-}
-
-func toAppSubscribe(subl *subscribeLog) *AppSubscribe {
-	sub := &AppSubscribe{
-		TargetName:    subl.Subscribe.TargetStepName,
-		TargetDetails: subl.Subscribe.TargetDetails,
-		SubscribeStep: &AppStep{
-			Name:    subl.Message,
-			Details: append(subl.Subscribe.TargetDetails, tyber.Detail{Name: "TargetName", Description: subl.Subscribe.TargetStepName}),
-			Status: Status{
-				StatusType: tyber.Running,
-				Started:    subl.Time,
-			},
-		},
-	}
-	return sub
 }
 
 func parseEventLog(log string) (*session.EventLog, error) {

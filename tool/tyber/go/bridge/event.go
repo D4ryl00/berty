@@ -3,7 +3,7 @@ package bridge
 import (
 	"fmt"
 
-	"berty.tech/berty/tool/tyber/go/parser"
+	"berty.tech/berty/tool/tyber/go/session"
 )
 
 // EventKind ...
@@ -24,19 +24,19 @@ const (
 
 func interfaceToEventKind(e interface{}) EventKind {
 	switch e.(type) {
-	case []parser.CreateSessionEvent:
+	case []session.CreateSessionEvent:
 		return ListSessionsEventKind
-	case parser.CreateSessionEvent:
+	case session.CreateSessionEvent:
 		return CreateSessionEventKind
-	case parser.UpdateSessionEvent:
+	case session.UpdateSessionEvent:
 		return UpdateSessionEventKind
-	case []parser.CreateTraceEvent:
+	case []session.CreateTraceEvent:
 		return ListTracesEventKind
-	case parser.CreateTraceEvent:
+	case session.CreateTraceEvent:
 		return CreateTraceEventKind
-	case parser.UpdateTraceEvent:
+	case session.UpdateTraceEvent:
 		return UpdateTraceEventKind
-	case parser.CreateStepEvent:
+	case session.CreateStepEvent:
 		return CreateStepEventKind
 	default:
 		return UnknownEventKind
