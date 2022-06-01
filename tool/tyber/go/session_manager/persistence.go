@@ -1,28 +1,27 @@
-package parser
+package session
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
-
-	"github.com/pkg/errors"
 )
 
-func (p *Parser) SaveSessionFile(sessionID string, path string) error {
-	p.sessionsLock.RLock()
-	session, ok := p.sessions.Get(sessionID)
-	p.sessionsLock.RUnlock()
+func (m *Manager) SaveSessionFile(sessionID string, path string) error {
+	m.sessionsLock.RLock()
+	session, ok := m.sessions.Get(sessionID)
+	m.sessionsLock.RUnlock()
 
 	if !ok {
-		return errors.New("ession ID not found")
+		return errors.New("session ID not found")
 	}
 
-	return p.saveSessionFile(session.(*Session), path)
+	return m.saveSessionFile(session.(*Session), path)
 }
 
-func (p *Parser) saveSessionFile(s *Session, path string) error {
+func (m *Manager) saveSessionFile(s *Session, path string) error {
 	content, err := json.MarshalIndent(s, "", "  ")
 	if err != nil {
 		return err
@@ -32,13 +31,14 @@ func (p *Parser) saveSessionFile(s *Session, path string) error {
 	return ioutil.WriteFile(path, content, 0644)
 }
 
-func (p *Parser) restoreSessionFile(sessionID string, path string) (*Session, error) {
+func (m *Manager) restoreSessionFile(sessionID string, path string) (*Session, error) {
 	s := &Session{}
 	content, err := ioutil.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
 
+	fmt.Println("content file", string(content))
 	if err = json.Unmarshal(content, &s); err != nil {
 		return nil, err
 	}
@@ -46,8 +46,8 @@ func (p *Parser) restoreSessionFile(sessionID string, path string) (*Session, er
 	return s, nil
 }
 
-func (p *Parser) deleteSessionFile(sessionID string) error {
-	path := filepath.Join(p.sessionPath, fmt.Sprintf("%s.json", sessionID))
+func (m *Manager) deleteSessionFile(sessionID string) error {
+	path := filepath.Join(m.sessionPath, fmt.Sprintf("%s.json", sessionID))
 	return os.Remove(path)
 }
 
@@ -55,9 +55,9 @@ type SessionsIndex struct {
 	Index []string `json:"index"`
 }
 
-func (p *Parser) saveSessionsIndexFile() error {
+func (m *Manager) saveSessionsIndexFile() error {
 	index := &SessionsIndex{}
-	for pair := p.sessions.Oldest(); pair != nil; pair = pair.Next() {
+	for pair := m.sessions.Oldest(); pair != nil; pair = pair.Next() {
 		index.Index = append(index.Index, pair.Key.(string))
 	}
 
@@ -67,13 +67,13 @@ func (p *Parser) saveSessionsIndexFile() error {
 	}
 	content = append(content, '\n')
 
-	path := filepath.Join(p.sessionPath, "sessions.json")
+	path := filepath.Join(m.sessionPath, "sessions.json")
 
 	return ioutil.WriteFile(path, content, 0644)
 }
 
-func (p *Parser) restoreSessionsIndexFile() ([]string, error) {
-	path := filepath.Join(p.sessionPath, "sessions.json")
+func (m *Manager) restoreSessionsIndexFile() ([]string, error) {
+	path := filepath.Join(m.sessionPath, "sessions.json")
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		return nil, nil
 	}

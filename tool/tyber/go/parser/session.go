@@ -23,7 +23,7 @@ type Session struct {
 	logger        *logger.Logger
 	srcScanner    *bufio.Scanner
 	srcCloser     io.Closer
-	openned       bool
+	opened        bool
 	canceled      bool
 	tracesLock    sync.Mutex
 	runningTraces map[string]*AppTrace
@@ -93,7 +93,7 @@ func (s *Session) parseLogs() error {
 			s.runningTraces[trace.ID] = trace
 			s.tracesLock.Unlock()
 
-			if s.openned {
+			if s.opened {
 				s.eventChan <- trace.ToCreateTraceEvent()
 			}
 
@@ -141,7 +141,7 @@ func (s *Session) parseLogs() error {
 			}
 			s.tracesLock.Unlock()
 
-			if s.openned {
+			if s.opened {
 				cse := step.ToCreateStepEvent(parentTrace.ID)
 				s.eventChan <- cse
 				if sl.Step.EndTrace || shouldUpdateTraceName {
@@ -227,4 +227,16 @@ func (s *Session) parseLogs() error {
 	s.eventChan <- sessionToUpdateEvent(s)
 
 	return nil
+}
+
+func (s *Session) SetOpened(opened bool) {
+	s.tracesLock.Lock()
+	s.opened = opened
+	s.tracesLock.Unlock()
+}
+
+func (s *Session) IsOpened() bool {
+	s.tracesLock.Lock()
+	defer s.tracesLock.Unlock()
+	return s.opened
 }
