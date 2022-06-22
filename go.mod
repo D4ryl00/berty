@@ -8,7 +8,7 @@ require (
 	berty.tech/go-ipfs-repo-encrypted v1.1.3
 	berty.tech/go-orbit-db v1.16.1
 	berty.tech/ipfs-webui-packed v1.0.0-v2.11.4-1
-	fyne.io/fyne/v2 v2.1.1
+	fyne.io/fyne/v2 v2.2.1
 	github.com/Masterminds/goutils v1.1.0 // indirect
 	github.com/Masterminds/semver v1.5.0
 	github.com/Masterminds/sprig v2.22.0+incompatible // indirect
@@ -94,7 +94,7 @@ require (
 	github.com/shibukawa/configdir v0.0.0-20170330084843-e180dbdc8da0
 	github.com/sideshow/apns2 v0.20.0
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
-	github.com/stretchr/testify v1.7.1
+	github.com/stretchr/testify v1.7.2
 	github.com/tailscale/depaware v0.0.0-20210622194025-720c4b409502
 	github.com/whyrusleeping/cbor-gen v0.0.0-20210713220151-be142a5ae1a8 // indirect
 	github.com/zcalusic/sysinfo v0.0.0-20200820110305-ef1bb2697bc2
@@ -102,7 +102,7 @@ require (
 	go.uber.org/multierr v1.7.0
 	go.uber.org/zap v1.20.0
 	golang.org/x/crypto v0.0.0-20210921155107-089bfa567519
-	golang.org/x/mobile v0.0.0-20210220033013-bdb1ca9a1e08
+	golang.org/x/mobile v0.0.0-20211207041440-4e6c2922fdee
 	golang.org/x/net v0.0.0-20210813160813-60bc85c4be6d
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	golang.org/x/text v0.3.7
