@@ -6,7 +6,7 @@ jobs:
   valist-publish:
     runs-on: ubuntu-latest
     steps:
-      - uses: robinraju/release-downloader@v1.3
+      - uses: robinraju/release-downloader@v1.4
         with:
           repository: "berty/berty"
           latest: true
