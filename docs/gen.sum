@@ -7,9 +7,9 @@ e0a1655de0bd86e03bac131c96a7dcd0a616409d  ../api/accounttypes.yaml
 905a4386f317f51d3965a531d39a783c25ad8d0b  ../api/bertyreplication.yaml
 32a7fc91108297910b332969720c09576e9f938e  ../api/bertyverifiablecreds.proto
 c487da32080977a2ec757252b6187633327b5e07  ../api/bertyverifiablecreds.yaml
-c9a201bb6dc2e1ef5b6fd17f5195b551d17bef05  ../api/errcode.proto
-038786285fbde081c2458fb39723f3d8f5648330  ../api/messengertypes.proto
-0bf65c534c7bd4dd9453bfcc828a7be7b2d9dc2f  ../api/messengertypes.yaml
+a0b74640beef2955474f2030f0db33c956509146  ../api/errcode.proto
+f8b6791fe60d7b12604a3fd3ecc2608e48aad7df  ../api/messengertypes.proto
+4bd60f16ddd6979a57138b1830f4632dc19a4780  ../api/messengertypes.yaml
 8a16aed5c26c8c37bb8184d49d192fdce7f26574  ../api/protocoltypes.proto
 082e4ffa1c0c8b0e1349e997b57abdaf0fcf2d86  ../api/protocoltypes.yaml
 429ad083ef1963a77adc439239118d0db65c9d37  ../api/pushtypes.proto

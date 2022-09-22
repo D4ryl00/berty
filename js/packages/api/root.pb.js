@@ -4431,6 +4431,7 @@ const $root = ($protobuf.roots["default"] || ($protobuf.roots["default"] = new $
               ErrMessengerDeepLinkInvalidPassphrase: 2002,
               ErrMessengerStreamEvent: 2003,
               ErrMessengerContactMetadataUnmarshal: 2004,
+              ErrMessengerProtocolNotReady: 2005,
               ErrDBEntryAlreadyExists: 2100,
               ErrDBAddConversation: 2101,
               ErrDBAddContactRequestOutgoingSent: 2102,
@@ -4490,6 +4491,8 @@ const $root = ($protobuf.roots["default"] || ($protobuf.roots["default"] = new $
               ErrBertyAccountCreationFailed: 5016,
               ErrBertyAccountUpdateFailed: 5017,
               ErrAppStorageNotSupported: 5018,
+              ErrBertyAccountManagerNotReady: 5019,
+              ErrBertyAccountMessengerNotReady: 5020,
               ErrPush: 6000,
               ErrPushWrongAccount: 6001,
               ErrPushUnableToDecrypt: 6002,
@@ -4521,7 +4524,10 @@ const $root = ($protobuf.roots["default"] || ($protobuf.roots["default"] = new $
               go_package: "berty.tech/berty/go/pkg/messengertypes",
               "(gogoproto.goproto_unkeyed_all)": false,
               "(gogoproto.goproto_unrecognized_all)": false,
-              "(gogoproto.goproto_sizecache_all)": false
+              "(gogoproto.goproto_sizecache_all)": false,
+              "(gogoproto.marshaler_all)": true,
+              "(gogoproto.unmarshaler_all)": true,
+              "(gogoproto.sizer_all)": true
             },
             nested: {
               MessengerService: {
@@ -4702,6 +4708,53 @@ const $root = ($protobuf.roots["default"] || ($protobuf.roots["default"] = new $
                   InteractionReactionsForEmoji: {
                     requestType: "InteractionReactionsForEmoji.Request",
                     responseType: "InteractionReactionsForEmoji.Reply"
+                  },
+                  OpenProtocol: {
+                    requestType: "OpenProtocol.Request",
+                    responseType: "OpenProtocol.Reply",
+                    responseStream: true
+                  },
+                  CloseProtocol: {
+                    requestType: "CloseProtocol.Request",
+                    responseType: "CloseProtocol.Reply",
+                    responseStream: true
+                  }
+                }
+              },
+              OpenProtocol: {
+                fields: {},
+                nested: {
+                  Request: {
+                    fields: {
+                      networkConfig: {
+                        type: "NetworkConfig",
+                        id: 1
+                      }
+                    }
+                  },
+                  Reply: {
+                    fields: {
+                      progress: {
+                        type: "berty.protocol.v1.Progress",
+                        id: 1
+                      }
+                    }
+                  }
+                }
+              },
+              CloseProtocol: {
+                fields: {},
+                nested: {
+                  Request: {
+                    fields: {}
+                  },
+                  Reply: {
+                    fields: {
+                      progress: {
+                        type: "berty.protocol.v1.Progress",
+                        id: 1
+                      }
+                    }
                   }
                 }
               },
@@ -7203,6 +7256,96 @@ const $root = ($protobuf.roots["default"] || ($protobuf.roots["default"] = new $
                         type: "Reaction",
                         id: 1
                       }
+                    }
+                  }
+                }
+              },
+              NetworkConfig: {
+                fields: {
+                  bootstrap: {
+                    rule: "repeated",
+                    type: "string",
+                    id: 1
+                  },
+                  rendezvous: {
+                    rule: "repeated",
+                    type: "string",
+                    id: 2
+                  },
+                  staticRelay: {
+                    rule: "repeated",
+                    type: "string",
+                    id: 3
+                  },
+                  dht: {
+                    type: "DHTFlag",
+                    id: 4,
+                    options: {
+                      "(gogoproto.customname)": "DHT"
+                    }
+                  },
+                  bluetoothLe: {
+                    type: "Flag",
+                    id: 5,
+                    options: {
+                      "(gogoproto.customname)": "BluetoothLE"
+                    }
+                  },
+                  appleMultipeerConnectivity: {
+                    type: "Flag",
+                    id: 6
+                  },
+                  androidNearby: {
+                    type: "Flag",
+                    id: 7
+                  },
+                  tor: {
+                    type: "TorFlag",
+                    id: 8
+                  },
+                  mdns: {
+                    type: "Flag",
+                    id: 9,
+                    options: {
+                      "(gogoproto.customname)": "MDNS"
+                    }
+                  },
+                  showDefaultServices: {
+                    type: "Flag",
+                    id: 10
+                  }
+                },
+                nested: {
+                  Flag: {
+                    values: {
+                      Undefined: 0,
+                      Disabled: 1,
+                      Enabled: 2
+                    }
+                  },
+                  TorFlag: {
+                    values: {
+                      TorUndefined: 0,
+                      TorDisabled: 1,
+                      TorOptional: 2,
+                      TorRequired: 3
+                    }
+                  },
+                  DHTFlag: {
+                    values: {
+                      DHTUndefined: 0,
+                      DHTDisabled: 1,
+                      DHTClient: 2,
+                      DHTServer: 3,
+                      DHTAuto: 4,
+                      DHTAutoServer: 5
+                    }
+                  },
+                  Preset: {
+                    values: {
+                      PresetUndefined: 0,
+                      PresetPerformance: 1,
+                      PresetFullAnonymity: 2
                     }
                   }
                 }

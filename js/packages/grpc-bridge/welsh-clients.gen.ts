@@ -153,6 +153,8 @@ export interface WelshMessengerServiceClient {
 	interactionReactionsForEmoji: UnaryType<
 		beapi.messenger.MessengerService['interactionReactionsForEmoji']
 	>
+	openProtocol: ResponseStreamType<beapi.messenger.MessengerService['openProtocol']>
+	closeProtocol: ResponseStreamType<beapi.messenger.MessengerService['closeProtocol']>
 }
 
 export interface WelshBridgeServiceClient {

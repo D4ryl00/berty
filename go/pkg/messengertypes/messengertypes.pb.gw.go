@@ -1300,6 +1300,54 @@ func local_request_MessengerService_InteractionReactionsForEmoji_0(ctx context.C
 	return msg, metadata, err
 }
 
+func request_MessengerService_OpenProtocol_0(ctx context.Context, marshaler runtime.Marshaler, client MessengerServiceClient, req *http.Request, pathParams map[string]string) (MessengerService_OpenProtocolClient, runtime.ServerMetadata, error) {
+	var protoReq OpenProtocol_Request
+	var metadata runtime.ServerMetadata
+
+	newReader, berr := utilities.IOReaderFactory(req.Body)
+	if berr != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", berr)
+	}
+	if err := marshaler.NewDecoder(newReader()).Decode(&protoReq); err != nil && err != io.EOF {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+
+	stream, err := client.OpenProtocol(ctx, &protoReq)
+	if err != nil {
+		return nil, metadata, err
+	}
+	header, err := stream.Header()
+	if err != nil {
+		return nil, metadata, err
+	}
+	metadata.HeaderMD = header
+	return stream, metadata, nil
+}
+
+func request_MessengerService_CloseProtocol_0(ctx context.Context, marshaler runtime.Marshaler, client MessengerServiceClient, req *http.Request, pathParams map[string]string) (MessengerService_CloseProtocolClient, runtime.ServerMetadata, error) {
+	var protoReq CloseProtocol_Request
+	var metadata runtime.ServerMetadata
+
+	newReader, berr := utilities.IOReaderFactory(req.Body)
+	if berr != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", berr)
+	}
+	if err := marshaler.NewDecoder(newReader()).Decode(&protoReq); err != nil && err != io.EOF {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+
+	stream, err := client.CloseProtocol(ctx, &protoReq)
+	if err != nil {
+		return nil, metadata, err
+	}
+	header, err := stream.Header()
+	if err != nil {
+		return nil, metadata, err
+	}
+	metadata.HeaderMD = header
+	return stream, metadata, nil
+}
+
 // RegisterMessengerServiceHandlerServer registers the http handlers for service MessengerService to "mux".
 // UnaryRPC     :call MessengerServiceServer directly.
 // StreamingRPC :currently unsupported pending https://github.com/grpc/grpc-go/issues/906.
@@ -2025,6 +2073,20 @@ func RegisterMessengerServiceHandlerServer(ctx context.Context, mux *runtime.Ser
 		}
 
 		forward_MessengerService_InteractionReactionsForEmoji_0(ctx, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+
+	mux.Handle("POST", pattern_MessengerService_OpenProtocol_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		err := status.Error(codes.Unimplemented, "streaming calls are not yet supported in the in-process transport")
+		_, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+		return
+	})
+
+	mux.Handle("POST", pattern_MessengerService_CloseProtocol_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		err := status.Error(codes.Unimplemented, "streaming calls are not yet supported in the in-process transport")
+		_, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+		return
 	})
 
 	return nil
@@ -2846,6 +2908,44 @@ func RegisterMessengerServiceHandlerClient(ctx context.Context, mux *runtime.Ser
 		forward_MessengerService_InteractionReactionsForEmoji_0(ctx, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
 
+	mux.Handle("POST", pattern_MessengerService_OpenProtocol_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		rctx, err := runtime.AnnotateContext(ctx, mux, req)
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_MessengerService_OpenProtocol_0(rctx, inboundMarshaler, client, req, pathParams)
+		ctx = runtime.NewServerMetadataContext(ctx, md)
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+
+		forward_MessengerService_OpenProtocol_0(ctx, mux, outboundMarshaler, w, req, func() (proto.Message, error) { return resp.Recv() }, mux.GetForwardResponseOptions()...)
+	})
+
+	mux.Handle("POST", pattern_MessengerService_CloseProtocol_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		rctx, err := runtime.AnnotateContext(ctx, mux, req)
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_MessengerService_CloseProtocol_0(rctx, inboundMarshaler, client, req, pathParams)
+		ctx = runtime.NewServerMetadataContext(ctx, md)
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+
+		forward_MessengerService_CloseProtocol_0(ctx, mux, outboundMarshaler, w, req, func() (proto.Message, error) { return resp.Recv() }, mux.GetForwardResponseOptions()...)
+	})
+
 	return nil
 }
 
@@ -2931,6 +3031,10 @@ var (
 	pattern_MessengerService_PushReceive_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"berty.messenger.v1", "MessengerService", "PushReceive"}, "", runtime.AssumeColonVerbOpt(true)))
 
 	pattern_MessengerService_InteractionReactionsForEmoji_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"berty.messenger.v1", "MessengerService", "InteractionReactionsForEmoji"}, "", runtime.AssumeColonVerbOpt(true)))
+
+	pattern_MessengerService_OpenProtocol_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"berty.messenger.v1", "MessengerService", "OpenProtocol"}, "", runtime.AssumeColonVerbOpt(true)))
+
+	pattern_MessengerService_CloseProtocol_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"berty.messenger.v1", "MessengerService", "CloseProtocol"}, "", runtime.AssumeColonVerbOpt(true)))
 )
 
 var (
@@ -3015,4 +3119,8 @@ var (
 	forward_MessengerService_PushReceive_0 = runtime.ForwardResponseMessage
 
 	forward_MessengerService_InteractionReactionsForEmoji_0 = runtime.ForwardResponseMessage
+
+	forward_MessengerService_OpenProtocol_0 = runtime.ForwardResponseStream
+
+	forward_MessengerService_CloseProtocol_0 = runtime.ForwardResponseStream
 )

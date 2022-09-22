@@ -126,3 +126,9 @@ http:
  - selector: berty.messenger.v1.MessengerService.InteractionReactionsForEmoji
    post: /berty.messenger.v1/MessengerService/InteractionReactionsForEmoji
    body: "*"
+ - selector: berty.messenger.v1.MessengerService.OpenProtocol
+   post: /berty.messenger.v1/MessengerService/OpenProtocol
+   body: "*"
+ - selector: berty.messenger.v1.MessengerService.CloseProtocol
+   post: /berty.messenger.v1/MessengerService/CloseProtocol
+   body: "*"

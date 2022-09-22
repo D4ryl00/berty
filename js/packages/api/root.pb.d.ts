@@ -6698,6 +6698,7 @@ export namespace berty {
             ErrMessengerDeepLinkInvalidPassphrase = 2002,
             ErrMessengerStreamEvent = 2003,
             ErrMessengerContactMetadataUnmarshal = 2004,
+            ErrMessengerProtocolNotReady = 2005,
             ErrDBEntryAlreadyExists = 2100,
             ErrDBAddConversation = 2101,
             ErrDBAddContactRequestOutgoingSent = 2102,
@@ -6757,6 +6758,8 @@ export namespace berty {
             ErrBertyAccountCreationFailed = 5016,
             ErrBertyAccountUpdateFailed = 5017,
             ErrAppStorageNotSupported = 5018,
+            ErrBertyAccountManagerNotReady = 5019,
+            ErrBertyAccountMessengerNotReady = 5020,
             ErrPush = 6000,
             ErrPushWrongAccount = 6001,
             ErrPushUnableToDecrypt = 6002,
@@ -6878,6 +6881,10 @@ export namespace berty {
                 public pushReceive(request: berty.messenger.v1.PushReceive.IRequest): Promise<berty.messenger.v1.PushReceive.Reply>;
                 public interactionReactionsForEmoji(request: berty.messenger.v1.InteractionReactionsForEmoji.IRequest, callback: berty.messenger.v1.MessengerService.InteractionReactionsForEmojiCallback): void;
                 public interactionReactionsForEmoji(request: berty.messenger.v1.InteractionReactionsForEmoji.IRequest): Promise<berty.messenger.v1.InteractionReactionsForEmoji.Reply>;
+                public openProtocol(request: berty.messenger.v1.OpenProtocol.IRequest, callback: berty.messenger.v1.MessengerService.OpenProtocolCallback): void;
+                public openProtocol(request: berty.messenger.v1.OpenProtocol.IRequest): Promise<berty.messenger.v1.OpenProtocol.Reply>;
+                public closeProtocol(request: berty.messenger.v1.CloseProtocol.IRequest, callback: berty.messenger.v1.MessengerService.CloseProtocolCallback): void;
+                public closeProtocol(request: berty.messenger.v1.CloseProtocol.IRequest): Promise<berty.messenger.v1.CloseProtocol.Reply>;
             }
 
             namespace MessengerService {
@@ -6963,6 +6970,118 @@ export namespace berty {
                 type PushReceiveCallback = (error: (Error|null), response?: berty.messenger.v1.PushReceive.Reply) => void;
 
                 type InteractionReactionsForEmojiCallback = (error: (Error|null), response?: berty.messenger.v1.InteractionReactionsForEmoji.Reply) => void;
+
+                type OpenProtocolCallback = (error: (Error|null), response?: berty.messenger.v1.OpenProtocol.Reply) => void;
+
+                type CloseProtocolCallback = (error: (Error|null), response?: berty.messenger.v1.CloseProtocol.Reply) => void;
+            }
+
+            interface IOpenProtocol {
+            }
+
+            class OpenProtocol implements IOpenProtocol {
+
+                public static create(properties?: berty.messenger.v1.IOpenProtocol): berty.messenger.v1.OpenProtocol;
+                public static encode(message: berty.messenger.v1.IOpenProtocol, writer?: $protobuf.Writer): $protobuf.Writer;
+                public static encodeDelimited(message: berty.messenger.v1.IOpenProtocol, writer?: $protobuf.Writer): $protobuf.Writer;
+                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): berty.messenger.v1.OpenProtocol;
+                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): berty.messenger.v1.OpenProtocol;
+                public static verify(message: { [k: string]: any }): (string|null);
+                public static fromObject(object: { [k: string]: any }): berty.messenger.v1.OpenProtocol;
+                public static toObject(message: berty.messenger.v1.OpenProtocol, options?: $protobuf.IConversionOptions): { [k: string]: any };
+                public toJSON(): { [k: string]: any };
+            }
+
+            namespace OpenProtocol {
+
+                interface IRequest {
+                    networkConfig?: (berty.messenger.v1.INetworkConfig|null);
+                }
+
+                class Request implements IRequest {
+
+                    public networkConfig?: (berty.messenger.v1.INetworkConfig|null);
+                    public static create(properties?: berty.messenger.v1.OpenProtocol.IRequest): berty.messenger.v1.OpenProtocol.Request;
+                    public static encode(message: berty.messenger.v1.OpenProtocol.IRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+                    public static encodeDelimited(message: berty.messenger.v1.OpenProtocol.IRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+                    public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): berty.messenger.v1.OpenProtocol.Request;
+                    public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): berty.messenger.v1.OpenProtocol.Request;
+                    public static verify(message: { [k: string]: any }): (string|null);
+                    public static fromObject(object: { [k: string]: any }): berty.messenger.v1.OpenProtocol.Request;
+                    public static toObject(message: berty.messenger.v1.OpenProtocol.Request, options?: $protobuf.IConversionOptions): { [k: string]: any };
+                    public toJSON(): { [k: string]: any };
+                }
+
+                interface IReply {
+                    progress?: (berty.protocol.v1.IProgress|null);
+                }
+
+                class Reply implements IReply {
+
+                    public progress?: (berty.protocol.v1.IProgress|null);
+                    public static create(properties?: berty.messenger.v1.OpenProtocol.IReply): berty.messenger.v1.OpenProtocol.Reply;
+                    public static encode(message: berty.messenger.v1.OpenProtocol.IReply, writer?: $protobuf.Writer): $protobuf.Writer;
+                    public static encodeDelimited(message: berty.messenger.v1.OpenProtocol.IReply, writer?: $protobuf.Writer): $protobuf.Writer;
+                    public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): berty.messenger.v1.OpenProtocol.Reply;
+                    public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): berty.messenger.v1.OpenProtocol.Reply;
+                    public static verify(message: { [k: string]: any }): (string|null);
+                    public static fromObject(object: { [k: string]: any }): berty.messenger.v1.OpenProtocol.Reply;
+                    public static toObject(message: berty.messenger.v1.OpenProtocol.Reply, options?: $protobuf.IConversionOptions): { [k: string]: any };
+                    public toJSON(): { [k: string]: any };
+                }
+            }
+
+            interface ICloseProtocol {
+            }
+
+            class CloseProtocol implements ICloseProtocol {
+
+                public static create(properties?: berty.messenger.v1.ICloseProtocol): berty.messenger.v1.CloseProtocol;
+                public static encode(message: berty.messenger.v1.ICloseProtocol, writer?: $protobuf.Writer): $protobuf.Writer;
+                public static encodeDelimited(message: berty.messenger.v1.ICloseProtocol, writer?: $protobuf.Writer): $protobuf.Writer;
+                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): berty.messenger.v1.CloseProtocol;
+                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): berty.messenger.v1.CloseProtocol;
+                public static verify(message: { [k: string]: any }): (string|null);
+                public static fromObject(object: { [k: string]: any }): berty.messenger.v1.CloseProtocol;
+                public static toObject(message: berty.messenger.v1.CloseProtocol, options?: $protobuf.IConversionOptions): { [k: string]: any };
+                public toJSON(): { [k: string]: any };
+            }
+
+            namespace CloseProtocol {
+
+                interface IRequest {
+                }
+
+                class Request implements IRequest {
+
+                    public static create(properties?: berty.messenger.v1.CloseProtocol.IRequest): berty.messenger.v1.CloseProtocol.Request;
+                    public static encode(message: berty.messenger.v1.CloseProtocol.IRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+                    public static encodeDelimited(message: berty.messenger.v1.CloseProtocol.IRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+                    public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): berty.messenger.v1.CloseProtocol.Request;
+                    public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): berty.messenger.v1.CloseProtocol.Request;
+                    public static verify(message: { [k: string]: any }): (string|null);
+                    public static fromObject(object: { [k: string]: any }): berty.messenger.v1.CloseProtocol.Request;
+                    public static toObject(message: berty.messenger.v1.CloseProtocol.Request, options?: $protobuf.IConversionOptions): { [k: string]: any };
+                    public toJSON(): { [k: string]: any };
+                }
+
+                interface IReply {
+                    progress?: (berty.protocol.v1.IProgress|null);
+                }
+
+                class Reply implements IReply {
+
+                    public progress?: (berty.protocol.v1.IProgress|null);
+                    public static create(properties?: berty.messenger.v1.CloseProtocol.IReply): berty.messenger.v1.CloseProtocol.Reply;
+                    public static encode(message: berty.messenger.v1.CloseProtocol.IReply, writer?: $protobuf.Writer): $protobuf.Writer;
+                    public static encodeDelimited(message: berty.messenger.v1.CloseProtocol.IReply, writer?: $protobuf.Writer): $protobuf.Writer;
+                    public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): berty.messenger.v1.CloseProtocol.Reply;
+                    public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): berty.messenger.v1.CloseProtocol.Reply;
+                    public static verify(message: { [k: string]: any }): (string|null);
+                    public static fromObject(object: { [k: string]: any }): berty.messenger.v1.CloseProtocol.Reply;
+                    public static toObject(message: berty.messenger.v1.CloseProtocol.Reply, options?: $protobuf.IConversionOptions): { [k: string]: any };
+                    public toJSON(): { [k: string]: any };
+                }
             }
 
             interface IPaginatedInteractionsOptions {
@@ -10752,6 +10871,73 @@ export namespace berty {
                     public static fromObject(object: { [k: string]: any }): berty.messenger.v1.InteractionReactionsForEmoji.Reply;
                     public static toObject(message: berty.messenger.v1.InteractionReactionsForEmoji.Reply, options?: $protobuf.IConversionOptions): { [k: string]: any };
                     public toJSON(): { [k: string]: any };
+                }
+            }
+
+            interface INetworkConfig {
+                bootstrap?: (string[]|null);
+                rendezvous?: (string[]|null);
+                staticRelay?: (string[]|null);
+                dht?: (berty.messenger.v1.NetworkConfig.DHTFlag|null);
+                bluetoothLe?: (berty.messenger.v1.NetworkConfig.Flag|null);
+                appleMultipeerConnectivity?: (berty.messenger.v1.NetworkConfig.Flag|null);
+                androidNearby?: (berty.messenger.v1.NetworkConfig.Flag|null);
+                tor?: (berty.messenger.v1.NetworkConfig.TorFlag|null);
+                mdns?: (berty.messenger.v1.NetworkConfig.Flag|null);
+                showDefaultServices?: (berty.messenger.v1.NetworkConfig.Flag|null);
+            }
+
+            class NetworkConfig implements INetworkConfig {
+
+                public bootstrap: string[];
+                public rendezvous: string[];
+                public staticRelay: string[];
+                public dht: berty.messenger.v1.NetworkConfig.DHTFlag;
+                public bluetoothLe: berty.messenger.v1.NetworkConfig.Flag;
+                public appleMultipeerConnectivity: berty.messenger.v1.NetworkConfig.Flag;
+                public androidNearby: berty.messenger.v1.NetworkConfig.Flag;
+                public tor: berty.messenger.v1.NetworkConfig.TorFlag;
+                public mdns: berty.messenger.v1.NetworkConfig.Flag;
+                public showDefaultServices: berty.messenger.v1.NetworkConfig.Flag;
+                public static create(properties?: berty.messenger.v1.INetworkConfig): berty.messenger.v1.NetworkConfig;
+                public static encode(message: berty.messenger.v1.INetworkConfig, writer?: $protobuf.Writer): $protobuf.Writer;
+                public static encodeDelimited(message: berty.messenger.v1.INetworkConfig, writer?: $protobuf.Writer): $protobuf.Writer;
+                public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): berty.messenger.v1.NetworkConfig;
+                public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): berty.messenger.v1.NetworkConfig;
+                public static verify(message: { [k: string]: any }): (string|null);
+                public static fromObject(object: { [k: string]: any }): berty.messenger.v1.NetworkConfig;
+                public static toObject(message: berty.messenger.v1.NetworkConfig, options?: $protobuf.IConversionOptions): { [k: string]: any };
+                public toJSON(): { [k: string]: any };
+            }
+
+            namespace NetworkConfig {
+
+                enum Flag {
+                    Undefined = 0,
+                    Disabled = 1,
+                    Enabled = 2
+                }
+
+                enum TorFlag {
+                    TorUndefined = 0,
+                    TorDisabled = 1,
+                    TorOptional = 2,
+                    TorRequired = 3
+                }
+
+                enum DHTFlag {
+                    DHTUndefined = 0,
+                    DHTDisabled = 1,
+                    DHTClient = 2,
+                    DHTServer = 3,
+                    DHTAuto = 4,
+                    DHTAutoServer = 5
+                }
+
+                enum Preset {
+                    PresetUndefined = 0,
+                    PresetPerformance = 1,
+                    PresetFullAnonymity = 2
                 }
             }
         }

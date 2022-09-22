@@ -140,6 +140,48 @@
         ]
       }
     },
+    "/berty.messenger.v1/MessengerService/CloseProtocol": {
+      "post": {
+        "summary": "CloseProtocol closes the underlying Berty Protocol instance.",
+        "operationId": "MessengerService_CloseProtocol",
+        "responses": {
+          "200": {
+            "description": "A successful response.(streaming responses)",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "result": {
+                  "$ref": "#/definitions/v1CloseProtocolReply"
+                },
+                "error": {
+                  "$ref": "#/definitions/runtimeStreamError"
+                }
+              },
+              "title": "Stream result of v1CloseProtocolReply"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/runtimeError"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1CloseProtocolRequest"
+            }
+          }
+        ],
+        "tags": [
+          "MessengerService"
+        ]
+      }
+    },
     "/berty.messenger.v1/MessengerService/ContactAccept": {
       "post": {
         "operationId": "MessengerService_ContactAccept",
@@ -962,6 +1004,48 @@
         ]
       }
     },
+    "/berty.messenger.v1/MessengerService/OpenProtocol": {
+      "post": {
+        "summary": "OpenProtocol initializes the underlying Berty Protocol instance.",
+        "operationId": "MessengerService_OpenProtocol",
+        "responses": {
+          "200": {
+            "description": "A successful response.(streaming responses)",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "result": {
+                  "$ref": "#/definitions/v1OpenProtocolReply"
+                },
+                "error": {
+                  "$ref": "#/definitions/runtimeStreamError"
+                }
+              },
+              "title": "Stream result of v1OpenProtocolReply"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/runtimeError"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1OpenProtocolRequest"
+            }
+          }
+        ],
+        "tags": [
+          "MessengerService"
+        ]
+      }
+    },
     "/berty.messenger.v1/MessengerService/ParseDeepLink": {
       "post": {
         "summary": "ParseDeepLink parses a link in the form of berty://xxx or https://berty.tech/id# and returns a structure\nthat can be used to display information.\nThis action is read-only.",
@@ -1559,6 +1643,37 @@
         }
       }
     },
+    "NetworkConfigDHTFlag": {
+      "type": "string",
+      "enum": [
+        "DHTUndefined",
+        "DHTDisabled",
+        "DHTClient",
+        "DHTServer",
+        "DHTAuto",
+        "DHTAutoServer"
+      ],
+      "default": "DHTUndefined"
+    },
+    "NetworkConfigFlag": {
+      "type": "string",
+      "enum": [
+        "Undefined",
+        "Disabled",
+        "Enabled"
+      ],
+      "default": "Undefined"
+    },
+    "NetworkConfigTorFlag": {
+      "type": "string",
+      "enum": [
+        "TorUndefined",
+        "TorDisabled",
+        "TorOptional",
+        "TorRequired"
+      ],
+      "default": "TorUndefined"
+    },
     "OrbitDBReplicationStatus": {
       "type": "object",
       "properties": {
@@ -2131,6 +2246,17 @@
           "$ref": "#/definitions/BertyLinkEncrypted"
         }
       }
+    },
+    "v1CloseProtocolReply": {
+      "type": "object",
+      "properties": {
+        "progress": {
+          "$ref": "#/definitions/v1Progress"
+        }
+      }
+    },
+    "v1CloseProtocolRequest": {
+      "type": "object"
     },
     "v1Contact": {
       "type": "object",
@@ -2942,6 +3068,66 @@
         }
       }
     },
+    "v1NetworkConfig": {
+      "type": "object",
+      "properties": {
+        "bootstrap": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "rendezvous": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "static_relay": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "dht": {
+          "$ref": "#/definitions/NetworkConfigDHTFlag"
+        },
+        "bluetooth_le": {
+          "$ref": "#/definitions/NetworkConfigFlag"
+        },
+        "apple_multipeer_connectivity": {
+          "$ref": "#/definitions/NetworkConfigFlag"
+        },
+        "android_nearby": {
+          "$ref": "#/definitions/NetworkConfigFlag"
+        },
+        "tor": {
+          "$ref": "#/definitions/NetworkConfigTorFlag"
+        },
+        "mdns": {
+          "$ref": "#/definitions/NetworkConfigFlag"
+        },
+        "show_default_services": {
+          "$ref": "#/definitions/NetworkConfigFlag"
+        }
+      }
+    },
+    "v1OpenProtocolReply": {
+      "type": "object",
+      "properties": {
+        "progress": {
+          "$ref": "#/definitions/v1Progress"
+        }
+      }
+    },
+    "v1OpenProtocolRequest": {
+      "type": "object",
+      "properties": {
+        "network_config": {
+          "$ref": "#/definitions/v1NetworkConfig"
+        }
+      }
+    },
     "v1OutOfStoreMessage": {
       "type": "object",
       "properties": {
@@ -3025,6 +3211,34 @@
           "title": "optional passphase to decrypt the link"
         }
       }
+    },
+    "v1Progress": {
+      "type": "object",
+      "properties": {
+        "state": {
+          "type": "string"
+        },
+        "doing": {
+          "type": "string"
+        },
+        "progress": {
+          "type": "number",
+          "format": "float"
+        },
+        "completed": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "total": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "delay": {
+          "type": "string",
+          "format": "uint64"
+        }
+      },
+      "description": "Progress define a generic object that can be used to display a progress bar for long-running actions."
     },
     "v1PushReceivedData": {
       "type": "object",

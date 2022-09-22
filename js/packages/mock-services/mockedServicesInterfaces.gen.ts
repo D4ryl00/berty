@@ -363,4 +363,12 @@ export interface IMessengerServiceMock {
 		beapi.messenger.InteractionReactionsForEmoji.IRequest,
 		beapi.messenger.InteractionReactionsForEmoji.IReply
 	>
+	OpenProtocol: ResponseStreamMock<
+		beapi.messenger.OpenProtocol.IRequest,
+		beapi.messenger.OpenProtocol.IReply
+	>
+	CloseProtocol: ResponseStreamMock<
+		beapi.messenger.CloseProtocol.IRequest,
+		beapi.messenger.CloseProtocol.IReply
+	>
 }
