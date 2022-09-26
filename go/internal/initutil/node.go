@@ -597,18 +597,18 @@ func (m *Manager) getLocalMessengerServer() (messengertypes.MessengerServiceServ
 		return nil, errcode.TODO.Wrap(fmt.Errorf("unable to init notification manager: %w", err))
 	}
 
-	// local protocol server
-	protocolServer, err := m.getLocalProtocolServer()
-	if err != nil {
-		return nil, errcode.TODO.Wrap(fmt.Errorf("unable to init local protocol server: %w", err))
-	}
+	// // local protocol server
+	// protocolServer, err := m.getLocalProtocolServer()
+	// if err != nil {
+	// 	return nil, errcode.TODO.Wrap(fmt.Errorf("unable to init local protocol server: %w", err))
+	// }
 
-	// protocol client
-	protocolClient, err := bertyprotocol.NewClient(m.getContext(), protocolServer, nil, nil) // FIXME: setup tracing
-	if err != nil {
-		return nil, errcode.TODO.Wrap(fmt.Errorf("unable to init protocol client: %w", err))
-	}
-	m.Node.Messenger.protocolClient = protocolClient
+	// // protocol client
+	// protocolClient, err := bertyprotocol.NewClient(m.getContext(), protocolServer, nil, nil) // FIXME: setup tracing
+	// if err != nil {
+	// 	return nil, errcode.TODO.Wrap(fmt.Errorf("unable to init protocol client: %w", err))
+	// }
+	// m.Node.Messenger.protocolClient = protocolClient
 
 	lcmanager := m.getLifecycleManager()
 
@@ -638,7 +638,7 @@ func (m *Manager) getLocalMessengerServer() (messengertypes.MessengerServiceServ
 		PlatformPushToken:   pushPlatformToken,
 		LogFilePath:         currentLogfilePath,
 	}
-	messengerServer, err := bertymessenger.New(protocolClient, &opts)
+	messengerServer, err := bertymessenger.New(&opts)
 	if err != nil {
 		return nil, errcode.TODO.Wrap(fmt.Errorf("unable to init messenger server: %w", err))
 	}

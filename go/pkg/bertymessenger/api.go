@@ -133,6 +133,7 @@ func (svc *service) internalInstanceShareableBertyID(ctx context.Context, req *m
 			return nil, errcode.TODO.Wrap(err)
 		}
 	}
+	// FIXME(d4ryl00): this method is called 2 times every times even though PublicRendezvousSeed is not nill
 	res, err = svc.protocolClient.ContactRequestReference(ctx, &protocoltypes.ContactRequestReference_Request{})
 	if err != nil {
 		return nil, errcode.TODO.Wrap(err)
