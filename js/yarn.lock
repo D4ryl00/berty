@@ -13592,10 +13592,10 @@ react-native-pager-view@5.4.9:
   resolved "https://registry.yarnpkg.com/react-native-pager-view/-/react-native-pager-view-5.4.9.tgz#c0d40847cfeda5a4e729b53271b0ee0fedff3eb5"
   integrity sha512-D6tzxpwMGdl6CXgtskGWhKRc5cJakCazESRGt7PkqnpyiH3N35ft1KmR82pCSQetAFlytFiToeu3a/dG5CELvA==
 
-react-native-permissions@^3.1.0:
-  version "3.1.0"
-  resolved "https://registry.yarnpkg.com/react-native-permissions/-/react-native-permissions-3.1.0.tgz#4cff584e0cc567aefe7c10b0d4f74f00950a68dd"
-  integrity sha512-Y/kAU8cUTNhX5CLxfAG96ItEjjmwvyqnVBie38Gj8HoomXQcKM+ToFmq/rPt+DOziCq7YFKinn9AIlnLBiV3AQ==
+react-native-permissions@^3.6.1:
+  version "3.6.1"
+  resolved "https://registry.yarnpkg.com/react-native-permissions/-/react-native-permissions-3.6.1.tgz#73adcc1cef8cd57a9ef167b4507405f4ff5749c4"
+  integrity sha512-fzPpPQXeD34inUccqtoResSwYubfrwUguP4qrVUUv8+KSMjYSaHGoS5HaIJLZHlN9gO+TvLJZ2L5ZljTsb6qnQ==
 
 react-native-progress@^5.0.0:
   version "5.0.0"
