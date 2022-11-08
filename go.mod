@@ -8,7 +8,7 @@ require (
 	berty.tech/go-ipfs-repo-encrypted v1.1.4
 	berty.tech/go-orbit-db v1.17.1
 	berty.tech/ipfs-webui-packed v1.0.0-v2.11.4-1
-	fyne.io/fyne/v2 v2.1.1
+	fyne.io/fyne/v2 v2.2.3
 	github.com/Masterminds/goutils v1.1.0 // indirect
 	github.com/Masterminds/semver v1.5.0
 	github.com/Masterminds/sprig v2.22.0+incompatible // indirect
@@ -104,7 +104,7 @@ require (
 	go.uber.org/multierr v1.7.0
 	go.uber.org/zap v1.23.0
 	golang.org/x/crypto v0.0.0-20220411220226-7b82a4e95df4
-	golang.org/x/mobile v0.0.0-20210220033013-bdb1ca9a1e08
+	golang.org/x/mobile v0.0.0-20211207041440-4e6c2922fdee
 	golang.org/x/net v0.0.0-20211112202133-69e39bad7dc2
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	golang.org/x/text v0.3.7
