@@ -92,7 +92,7 @@ require (
 	google.golang.org/grpc v1.47.0
 	google.golang.org/grpc/examples v0.0.0-20200922230038-4e932bbcb079
 	gopkg.in/square/go-jose.v2 v2.6.0
-	gorm.io/gorm v1.22.3
+	gorm.io/gorm v1.23.1
 	moul.io/godev v1.7.0
 	moul.io/openfiles v1.2.0
 	moul.io/progress v1.4.0
@@ -101,7 +101,7 @@ require (
 	moul.io/u v1.27.0
 	moul.io/zapconfig v1.4.0
 	moul.io/zapfilter v1.7.0
-	moul.io/zapgorm2 v1.1.1
+	moul.io/zapgorm2 v1.1.3
 	moul.io/zapring v1.3.3
 	mvdan.cc/gofumpt v0.4.0
 )
@@ -244,7 +244,7 @@ require (
 	github.com/jbenet/goprocess v0.1.4 // indirect
 	github.com/jinzhu/copier v0.0.0-20190924061706-b57f9002281a // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
-	github.com/jinzhu/now v1.1.2 // indirect
+	github.com/jinzhu/now v1.1.4 // indirect
 	github.com/kilic/bls12-381 v0.1.1-0.20210503002446-7b7597926c69 // indirect
 	github.com/klauspost/compress v1.15.10 // indirect
 	github.com/klauspost/cpuid/v2 v2.1.1 // indirect
