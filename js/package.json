@@ -79,7 +79,7 @@
   },
   "devDependencies": {
     "@babel/core": "^7.16.5",
-    "@babel/node": "^7.16.5",
+    "@babel/node": "^7.20.5",
     "@babel/preset-typescript": "^7.16.7",
     "@babel/runtime": "^7.16.5",
     "@faker-js/faker": "^6.3.1",
