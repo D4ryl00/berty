@@ -81,7 +81,7 @@ require (
 	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2
 	google.golang.org/grpc v1.50.1
 	google.golang.org/grpc/cmd/protoc-gen-go-grpc v1.3.0
-	gorm.io/gorm v1.22.3
+	gorm.io/gorm v1.23.6
 	moul.io/godev v1.7.0
 	moul.io/openfiles v1.2.0
 	moul.io/progress v1.4.0
@@ -89,7 +89,7 @@ require (
 	moul.io/testman v1.5.0
 	moul.io/u v1.27.0
 	moul.io/zapconfig v1.4.0
-	moul.io/zapgorm2 v1.1.1
+	moul.io/zapgorm2 v1.3.0
 	moul.io/zapring v1.3.3
 	mvdan.cc/gofumpt v0.4.0
 )
@@ -258,7 +258,7 @@ require (
 	github.com/jdxcode/netrc v0.0.0-20221124155335-4616370d1a84 // indirect
 	github.com/jinzhu/copier v0.0.0-20190924061706-b57f9002281a // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
-	github.com/jinzhu/now v1.1.2 // indirect
+	github.com/jinzhu/now v1.1.4 // indirect
 	github.com/kilic/bls12-381 v0.1.1-0.20210503002446-7b7597926c69 // indirect
 	github.com/klauspost/compress v1.16.0 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.3 // indirect
