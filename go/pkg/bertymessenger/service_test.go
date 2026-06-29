@@ -1372,10 +1372,10 @@ func TestAccountUpdate(t *testing.T) {
 	time.Sleep(4 * time.Second)
 
 	user := nodes[0]
-	userPK := user.account.GetPublicKey()
+	userPK := user.GetAccount().GetPublicKey()
 	friends := nodes[1:]
 	for _, friend := range friends {
-		_, err := user.client.ContactRequest(ctx, &messengertypes.ContactRequest_Request{Link: friend.account.GetLink()})
+		_, err := user.client.ContactRequest(ctx, &messengertypes.ContactRequest_Request{Link: friend.GetAccount().GetLink()})
 		require.NoError(t, err)
 		time.Sleep(1 * time.Second)
 		_, err = friend.client.ContactAccept(ctx, &messengertypes.ContactAccept_Request{PublicKey: userPK})
@@ -1399,7 +1399,7 @@ func TestAccountUpdate(t *testing.T) {
 
 	logger.Info("checking friends")
 	for _, friend := range friends {
-		logger.Info("checking node", zap.String("name", friend.account.GetDisplayName()))
+		logger.Info("checking node", zap.String("name", friend.GetAccount().GetDisplayName()))
 		userInFriend := friend.GetContact(t, userPK)
 		require.Equal(t, testName, userInFriend.GetDisplayName())
 	}
@@ -1469,9 +1469,8 @@ func TestFlappyAccountUpdateGroup(t *testing.T) {
 
 	logger.Info("checking friends")
 	for _, friend := range friends {
-		logger.Info("checking node", zap.String("name", friend.account.GetDisplayName()))
-		userInFriend, ok := friend.members[conv.GetAccountMemberPublicKey()]
-		require.True(t, ok)
+		logger.Info("checking node", zap.String("name", friend.GetAccount().GetDisplayName()))
+		userInFriend := friend.GetMember(t, conv.GetAccountMemberPublicKey())
 		require.Equal(t, testName, userInFriend.GetDisplayName())
 	}
 
